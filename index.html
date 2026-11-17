@@ -3,34 +3,77 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="跟着北京版七年级上册，用观察、比较和小实验理解生物。">
-  <meta name="theme-color" content="#f6f3ea">
+  <meta name="description" content="跟着北京版七年级上册，用显微照片、实验记录和小项目学会用证据解释生物现象。">
   <meta name="robots" content="noindex">
   <title>生物实验台 · 北京版七年级上册</title>
   <link rel="icon" type="image/png" href="./favicon.png" sizes="32x32">
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./course.css?v=2">
-  <script defer src="./unit-one.js"></script>
-  <script defer src="./unit-two.js"></script>
-  <script defer src="./diagrams.js"></script>
-  <script defer src="./scenes.js"></script>
-  <script defer src="./app.js?v=2"></script>
+  <link rel="stylesheet" href="./styles.css?v=3">
+  <link rel="stylesheet" href="./course.css?v=3">
+  <link rel="stylesheet" href="./cell-lab.css?v=3">
+  <link rel="stylesheet" href="./project-labs.css?v=3">
+  <link rel="stylesheet" href="./learning.css?v=3">
+  <script defer src="./unit-one.js?v=3"></script>
+  <script defer src="./unit-two.js?v=3"></script>
+  <script defer src="./diagrams.js?v=3"></script>
+  <script defer src="./scenes.js?v=3"></script>
+  <script defer src="./revisions.js?v=3"></script>
+  <script defer src="./project-labs.js?v=3"></script>
+  <script defer src="./cell-lab.js?v=3"></script>
+  <script defer src="./app.js?v=3"></script>
 </head>
 <body>
-  <a class="skip" href="#lesson">跳到本课内容</a>
-  <header class="site-header">
-    <div class="wrap">
-      <a class="brand" href="#/" aria-label="生物实验台，返回学习入口"><span class="brand-icon" aria-hidden="true">◉</span><span class="brand-text">生物实验台</span></a>
-      <div class="edition">北京版 · 七年级上册</div>
-    </div>
-  </header>
+  <a class="skip" href="#lesson">跳到学习内容</a>
+  <header class="site-header"><div class="wrap">
+    <a class="brand" href="#/" aria-label="生物实验台，返回学习入口"><span class="brand-icon" aria-hidden="true">◉</span><span class="brand-text">生物实验台</span></a>
+    <div class="edition">北京版 · 七年级上册</div>
+  </div></header>
   <main id="main" class="wrap">
     <details class="directory" id="directory">
       <summary>课本目录</summary>
-      <div id="contents"></div>
+      <div id="contents">
+        <section class="unit">
+          <h2>第一单元 认识生命</h2>
+          <div class="directory-chapter">
+            <h3>第一章 走近生命世界</h3>
+            <a href="#/lesson/life-traits" data-page="3"><span>生物的特征</span></a>
+            <a href="#/lesson/research-methods" data-page="11"><span>生物学的研究方法</span></a>
+            <a href="#/lesson/campus-green" data-page="22" data-project><span>争当校园绿化“规划师”</span></a>
+          </div>
+          <div class="directory-chapter">
+            <h3>第二章 生物体的结构</h3>
+            <a href="#/lesson/cell" data-page="27"><span>细胞</span></a>
+            <a href="#/lesson/levels" data-page="42"><span>生物体的结构层次</span></a>
+            <a href="#/lesson/cell-expo" data-page="52" data-project><span>筹备细胞博览会</span></a>
+          </div>
+        </section>
+        <section class="unit">
+          <h2>第二单元 生物的营养和运输</h2>
+          <div class="directory-chapter">
+            <h3>第一章 生物所需的营养</h3>
+            <a href="#/lesson/plant-nutrients" data-page="59"><span>植物所需的水和无机盐</span></a>
+            <a href="#/lesson/photosynthesis" data-page="68"><span>植物的光合作用</span></a>
+            <a href="#/lesson/plant-factory" data-page="78" data-project><span>建造家庭“小小植物工厂”</span></a>
+            <a href="#/lesson/human-nutrients" data-page="81"><span>人所需的营养</span></a>
+            <a href="#/lesson/food-planner" data-page="94" data-project><span>成为健康“美食家”</span></a>
+          </div>
+          <div class="directory-chapter">
+            <h3>第二章 生物体内的物质运输</h3>
+            <a href="#/lesson/plant-transport" data-page="99"><span>植物体内的物质运输</span></a>
+            <a href="#/lesson/human-transport" data-page="106"><span>人体内的物质运输</span></a>
+            <a href="#/lesson/aed-map" data-page="120" data-project><span>自动体外除颤仪的社区推广</span></a>
+          </div>
+        </section>
+      </div>
     </details>
-    <article id="lesson" aria-labelledby="lesson-title" tabindex="-1"></article>
-    <noscript>打开浏览器的 JavaScript 后，就能使用图中的互动。</noscript>
+    <article id="lesson" aria-labelledby="lesson-title" tabindex="-1">
+      <section class="load-panel">
+        <h1 id="lesson-title">生物实验台</h1>
+        <p>正在准备观察材料。如果一直没有出现，请重新载入页面，或先展开上方的课本目录。</p>
+        <a href="./">重新打开学习入口</a>
+      </section>
+      <noscript><p>浏览器已关闭 JavaScript。你仍可以看教材目录，开启 JavaScript 后可使用课堂互动。</p></noscript>
+    </article>
+    <p id="storage-status" class="storage-status" role="status" hidden></p>
   </main>
   <footer class="site-footer"><div class="wrap">北京出版社 · 七年级上册配套观察与实验</div></footer>
 </body>

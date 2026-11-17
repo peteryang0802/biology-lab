@@ -42,6 +42,43 @@
         drawLeaf(120,68,.67);
       }
     }
+    function drawBean(withRoot) {
+      if (withRoot) {
+        // The pale radicle comes from the bean itself, without a shoot or leaves.
+        ctx.beginPath();
+        ctx.moveTo(117, 72);
+        ctx.bezierCurveTo(141, 79, 125, 102, 146, 113);
+        ctx.strokeStyle = brown;
+        ctx.lineWidth = 10;
+        ctx.stroke();
+        ctx.strokeStyle = '#fff2c6';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+      }
+      oval(95, 70, 32, 18, sand, brown, -.4);
+      path([[76, 77], [92, 72], [108, 62]], brown, null, 3);
+    }
+    function drawGrass(leaves) {
+      path([[36, 113], [153, 113]], brown);
+      for (const [x, y] of [[54, 61], [121, 58], [78, 46], [99, 29], [145, 71]].slice(0, leaves)) {
+        ctx.beginPath();
+        ctx.moveTo(94, 112);
+        ctx.quadraticCurveTo((94 + x) / 2, y + 16, x, y);
+        ctx.strokeStyle = green;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+      }
+    }
+    function drawRootHairs() {
+      rect(40, 35, 115, 85, '#dbeaf0', blue);
+      path([[92, 23], [97, 55], [91, 84], [94, 108]], brown, null, 8);
+      for (const [x, y] of [[96, 58], [94, 67], [92, 76], [91, 84], [92, 91]]) {
+        path([[x, y], [x - 21, y + 7]], brown, null, 2);
+        path([[x, y], [x + 23, y + 5]], brown, null, 2);
+      }
+      arrow(46, 65, 65, 65);
+      arrow(147, 79, 127, 79);
+    }
     function drawCells(single = false) {
       const widths = single ? [51] : [37,83,129];
       const rows = single ? [45] : [44,79];
@@ -50,6 +87,14 @@
         rect(x,y,...size,'#d9e7b2',ink);
         oval(x+size[0]/2, y+size[1]/2, single ? 10 : 5, single ? 8 : 4, green,ink);
       }
+    }
+    function highlightSample(x, y, width, height) {
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = '#993f25';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x, y, width, height);
+      ctx.restore();
     }
     function drawCard() {
       rect(51,26,91,87,paper);
@@ -67,10 +112,16 @@
     }
 
     switch (kind) {
-      case 'seed': oval(95,88,31,18,sand,brown,-.4); path([[75,95],[96,89],[114,76]],brown); break;
+      case 'seed': drawBean(false); break;
+      case 'bean-root': drawBean(true); break;
+      case 'grass-before': drawGrass(2); break;
+      case 'grass-after': drawGrass(5); break;
+      case 'root-hairs': drawRootHairs(); break;
       case 'sprout': plant(30); break;
       case 'plant': plant(68); break;
       case 'leaf': drawLeaf(96,71); break;
+      case 'level-leaf': drawLeaf(96,71,1.32); highlightSample(86,57,28,26); break;
+      case 'level-tissue': drawCells(); highlightSample(80,77,52,39); break;
       case 'cell': drawCells(true); break;
       case 'cells': case 'wall': drawCells(); break;
       case 'sun': oval(96,68,25,25,'#f3cf6d',orange); for(let i=0;i<8;i++) { const t=i*Math.PI/4; path([[96+36*Math.cos(t),68+36*Math.sin(t)],[96+48*Math.cos(t),68+48*Math.sin(t)]],orange); } break;

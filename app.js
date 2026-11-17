@@ -1,174 +1,111 @@
 'use strict';
 
-const contents = [
-  { title: '第一单元 认识生命', chapters: [
-    { title: '第一章 走近生命世界', entries: [
-      ['life-traits', '生物的特征'], ['research-methods', '生物学的研究方法'], ['campus-green', '争当校园绿化“规划师”', true],
-    ] },
-    { title: '第二章 生物体的结构', entries: [
-      ['cell', '细胞'], ['levels', '生物体的结构层次'], ['cell-expo', '筹备细胞博览会', true],
-    ] },
-  ] },
-  { title: '第二单元 生物的营养和运输', chapters: [
-    { title: '第一章 生物所需的营养', entries: [
-      ['plant-nutrients', '植物所需的水和无机盐'], ['photosynthesis', '植物的光合作用'], ['plant-factory', '建造家庭“小小植物工厂”', true],
-      ['human-nutrients', '人所需的营养'], ['food-planner', '成为健康“美食家”', true],
-    ] },
-    { title: '第二章 生物体内的物质运输', entries: [
-      ['plant-transport', '植物体内的物质运输'], ['human-transport', '人体内的物质运输'], ['aed-map', '自动体外除颤仪的社区推广', true],
-    ] },
-  ] },
-];
-const chapters = contents.flatMap(unit => unit.chapters.map(chapter => ({ ...chapter, unit: unit.title })));
-const sequence = chapters.flatMap(chapter => chapter.entries.map(([id, title, project]) => ({
-  id, title, project, chapter: chapter.title, unit: chapter.unit,
-})));
-const textbookPages = [3, 11, 22, 27, 42, 52, 59, 68, 78, 81, 94, 99, 106, 120];
-const textbookActivities = {
-  'life-traits': '第 7–8 页：对照生物的共同特征',
-  'research-methods': '第 12 页「观察生物标本」、第 16–18 页的对照探究',
-  'campus-green': '第 22–23 页：调查植物分布，再设计校园绿化方案',
-  cell: '第 30–32 页实验探究「制作并观察洋葱鳞片叶内表皮细胞临时装片」',
-  levels: '第 44 页图 1-2-24：观察同一个番茄果实里的不同细胞',
-  'cell-expo': '第 52–53 页：显微摄影与制作细胞模型',
-};
-const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
 const outlet = document.querySelector('#lesson');
 const directory = document.querySelector('#directory');
+const directorySummary = directory.querySelector('summary');
 const route = id => '#/lesson/' + id;
-
+const sequence = [...directory.querySelectorAll('a[data-page]')].map(link => ({
+  id: link.hash.slice(9),
+  title: link.querySelector('span').textContent,
+  chapter: link.closest('.directory-chapter').querySelector('h3').textContent,
+  unit: link.closest('.unit').querySelector('h2').textContent,
+  page: Number(link.dataset.page),
+  project: link.hasAttribute('data-project'),
+  link,
+}));
+const byId = new Map(sequence.map(entry => [entry.id, entry]));
+const storageKey = 'bio-learning-lab:v1';
 const state = readState();
+const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
+let playingPrompt;
+
+function plainRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cleanState(raw) {
+  if (!plainRecord(raw)) return {};
+  const clean = {};
+  if (byId.has(raw.last)) clean.last = raw.last;
+  for (const {id} of sequence) {
+    if (plainRecord(raw[id])) clean[id] = raw[id];
+  }
+  for (const key of ['viewed', 'practiced', 'notes', 'reviews', 'projects', 'guesses']) {
+    if (!plainRecord(raw[key])) continue;
+    clean[key] = {};
+    for (const {id} of sequence) {
+      if (Object.hasOwn(raw[key], id)) clean[key][id] = raw[key][id];
+    }
+  }
+  return clean;
+}
+
 function readState() {
+  try { return cleanState(JSON.parse(localStorage.getItem(storageKey))); }
+  catch { return {}; }
+}
+
+function saveState() {
+  const status = document.querySelector('#storage-status');
   try {
-    const saved = JSON.parse(localStorage.getItem('bio-learning-lab:v1'));
-    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    status.hidden = true;
+    return true;
   } catch {
-    return {};
+    status.hidden = false;
+    status.textContent = '浏览器暂时无法保存。可以继续做，想留住记录时可从学习入口下载一份。';
+    return false;
   }
 }
-function saveState() {
-  try { localStorage.setItem('bio-learning-lab:v1', JSON.stringify(state)); } catch { /* The activity still works when storage is unavailable. */ }
-}
+
 function escape(value = '') {
-  return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
 }
 
-function renderDirectory(current) {
-  document.querySelector('#contents').innerHTML = contents.map(unit => `<div class="unit">
-    <h2>${escape(unit.title)}</h2>
-    ${unit.chapters.map(chapter => `<div class="directory-chapter"><h3>${escape(chapter.title)}</h3>
-      ${chapter.entries.map(([id, title, project]) => `<a href="${route(id)}"${current === id ? ' aria-current="page"' : ''}>${project ? '<small>项目实践</small>' : ''}<span>${escape(title)}</span></a>`).join('')}
-    </div>`).join('')}
-  </div>`).join('');
+function updateDirectory(current) {
+  for (const entry of sequence) {
+    if (entry.id === current) entry.link.setAttribute('aria-current', 'page');
+    else entry.link.removeAttribute('aria-current');
+    let badge = entry.link.querySelector('.directory-status');
+    if (!badge) {
+      badge = document.createElement('small');
+      badge.className = 'directory-status';
+      entry.link.append(badge);
+    }
+    badge.textContent = state.practiced?.[entry.id] ? '做过练习' : state.viewed?.[entry.id] || state[entry.id] ? '看过' : entry.project ? '项目实践' : '';
+  }
 }
-directory.addEventListener('click', event => {
-  if (event.target.closest('a')) directory.open = false;
-});
+
+function markPracticed(entry) {
+  if (!state.practiced?.[entry.id]) {
+    state.practiced = { ...state.practiced, [entry.id]: true };
+    saveState();
+    updateDirectory(entry.id);
+  }
+}
 
 function intro(entry, question, description = '') {
-  const textbookPage = textbookPages[sequence.indexOf(entry)];
+  const anchor = globalThis.bioRevisions?.[entry.id]?.anchor;
   return `<header class="intro">
     <p class="eyebrow">${escape(entry.unit)} · ${escape(entry.chapter)}</p>
     <p class="lesson-name">${entry.project ? '项目实践 · ' : ''}${escape(entry.title)}</p>
     <h1 id="lesson-title" tabindex="-1">${escape(question)}</h1>
     ${description ? `<p class="intro-copy">${escape(description)}</p>` : ''}
-    <p class="book-note">课本第 ${textbookPage} 页起${textbookActivities[entry.id] ? ' · ' + textbookActivities[entry.id] : ''}</p>
+    <details class="book-note"><summary>课本第 ${entry.page} 页起</summary><p>${escape(anchor || entry.title)}</p></details>
   </header>`;
 }
+
 function following(entry) {
-  const next = sequence[sequence.indexOf(entry) + 1];
-  return next
-    ? `<nav class="lesson-next" data-next="${next.id}" aria-label="按课本继续">
-        <a href="${route(next.id)}"><span><small>${next.project ? '接着做课本项目' : '按课本顺序继续'}</small><strong>${escape(next.title)}</strong></span><span aria-hidden="true">→</span></a>
-      </nav>`
-    : '<p class="lesson-end">七年级上册的项目练完了。课本目录在页面上方。</p>';
-}
-
-function diagramSection(stage, index) {
-  return `<section class="${index ? 'transfer' : 'experiment'}" aria-labelledby="scene-${index}">
-    <header class="section-heading"><h2 id="scene-${index}">${escape(stage.heading)}</h2></header>
-    <div class="station" data-scene="${index}">
-      <figure class="specimen diagram-panel">
-        <ul class="diagram-items"></ul>
-        <figcaption>教学示意 · ${escape(stage.caption)}</figcaption>
-      </figure>
-      <div class="controls">
-        <h3>${escape(stage.prompt)}</h3>
-        <div class="choice-row" role="group" aria-labelledby="scene-${index}">
-          ${stage.choices.map((choice, option) => `<button type="button" class="choice" data-choice="${option}" aria-pressed="false">${escape(choice.label)}</button>`).join('')}
-        </div>
-        <p class="feedback" role="status">看图，先选一种试试。</p>
-      </div>
-    </div>
-  </section>`;
-}
-
-function mountDiagram(entry, stage, index) {
-  const host = outlet.querySelector(`[data-scene="${index}"]`);
-  const board = host.querySelector('.diagram-items');
-  const feedback = host.querySelector('[role=status]');
-  const buttons = [...host.querySelectorAll('[data-choice]')];
-  let selected = state[entry.id]?.[index];
-  if (!Number.isInteger(selected) || !stage.choices[selected]) selected = null;
-
-  function redraw() {
-    const selectedChoice = stage.choices[selected];
-    const items = selectedChoice?.items ?? stage.items;
-    const scene = host.querySelector('.scene-illustration');
-    board.replaceChildren(...items.map(([kind, label], position) => {
-      const item = document.createElement('li');
-      item.dataset.focus = String(selectedChoice?.focus?.includes(position) === true);
-      if (!scene && kind.endsWith('-photo')) {
-        const photo = photographs[kind.slice(0, -6)];
-        const image = document.createElement('img');
-        image.src = photo.src;
-        image.alt = photo.alt;
-        image.loading = 'lazy';
-        image.decoding = 'async';
-        item.append(image);
-      } else if (!scene) {
-        const drawing = document.createElement('canvas');
-        drawing.width = 192;
-        drawing.height = 138;
-        drawing.setAttribute('aria-hidden', 'true');
-        globalThis.paintBioDiagram(drawing.getContext('2d'), kind);
-        item.append(drawing);
-      }
-      const text = document.createElement('span');
-      text.textContent = label;
-      item.append(text);
-      return item;
-    }));
-    if (scene) globalThis.paintBioScene(scene.getContext('2d'), entry.id, index, selected);
-    feedback.textContent = selectedChoice?.feedback ?? '看图，先选一种试试。';
-    for (const [option, button] of buttons.entries()) button.setAttribute('aria-pressed', String(option === selected));
-  }
-  for (const [indexChoice, button] of buttons.entries()) {
-    button.addEventListener('click', () => {
-      selected = indexChoice;
-      state[entry.id] = { ...state[entry.id], [index]: selected };
-      state.last = entry.id;
-      saveState();
-      redraw();
-    });
-  }
-  if (['photosynthesis', 'human-transport', 'aed-map'].includes(entry.id)) {
-    const scene = document.createElement('canvas');
-    scene.className = 'scene-illustration';
-    scene.width = 560;
-    scene.height = 204;
-    scene.setAttribute('aria-hidden', 'true');
-    board.before(scene);
-    board.classList.add('diagram-labels');
-  }
-  redraw();
-}
-
-function renderDiagramLesson(entry, data) {
-  outlet.innerHTML = intro(entry, data.question) + data.stages.map(diagramSection).join('') +
-    `<section class="reflection"><h2>今天用到的办法</h2><p>${escape(data.summary)}</p>
-      ${data.outside ? `<p class="outside">${escape(data.outside)}</p>` : ''}</section>` + following(entry);
-  data.stages.forEach((stage, index) => mountDiagram(entry, stage, index));
+  const index = sequence.indexOf(entry);
+  const next = sequence[index + 1];
+  const previous = sequence[index - 1];
+  return `<nav class="lesson-next" aria-label="按课本顺序移动">
+    ${next ? `<a class="next-lesson" href="${route(next.id)}"><span><small>按课本顺序继续</small><strong>${escape(next.title)}</strong></span><span aria-hidden="true">→</span></a>`
+      : '<a class="next-lesson" href="#/"><span><strong>回到学习入口</strong><small>从目录回看任一课</small></span></a>'}
+    ${previous ? `<a class="previous-lesson" href="${route(previous.id)}">← 上一项 · ${escape(previous.title)}</a>` : ''}
+  </nav>`;
 }
 
 const photographs = {
@@ -177,179 +114,521 @@ const photographs = {
 };
 const onionDetail = './assets/onion-detail.webp';
 
-function photoFigure(id, item, extra = '') {
-  return `<figure class="specimen"><div class="viewfinder" id="${id}">
-    <img class="specimen-image" src="${item.src}" alt="${item.alt}" decoding="async"${id === 'microscope' ? ' fetchpriority="high"' : ' loading="lazy"'}>
-    <span class="image-fallback" hidden>${item.alt}</span>${extra}
-    </div><figcaption>${item.caption}</figcaption></figure>`;
+function setCanvasSize(canvas, width, height) {
+  const ratio = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  const ctx = canvas.getContext('2d');
+  ctx?.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return ctx;
 }
 
-function bindPhotoFallback(frame) {
-  const img = frame.querySelector('img');
-  const placeholder = frame.querySelector('.image-fallback');
-  const marker = frame.querySelector('.zoom-marker');
-  function update(missing) {
-    img.hidden = missing;
-    placeholder.hidden = !missing;
-    if (marker) marker.hidden = missing;
-  }
-  img.addEventListener('error', () => update(true));
-  img.addEventListener('load', () => update(false));
-  if (img.complete && img.getAttribute('src') && !img.naturalWidth) update(true);
+function renderDiagramSection(stage, index) {
+  return `<section class="${index ? 'transfer' : 'experiment'}" aria-labelledby="scene-${index}">
+    <header class="section-heading"><h2 id="scene-${index}">${escape(stage.heading)}</h2></header>
+    <div class="station" data-scene="${index}">
+      <figure class="specimen diagram-panel">
+        <ul class="diagram-items"></ul>
+        <p class="scene-description" hidden></p>
+        <figcaption>教学示意 · ${escape(stage.caption)}</figcaption>
+      </figure>
+      <div class="controls">
+        <h3 id="prompt-${index}">${escape(stage.prompt)}</h3>
+        <p class="feedback" role="status"></p>
+        <div class="choice-row" role="group" aria-labelledby="prompt-${index}">
+          ${stage.choices.map((choice, option) => `<button type="button" class="choice" data-choice="${option}" aria-pressed="false">${escape(choice.label)}</button>`).join('')}
+          <button type="button" class="choice unsure-choice" data-unsure aria-pressed="false">还不确定</button>
+        </div>
+        <button type="button" class="action" data-reveal>看看记录</button>
+        <button type="button" class="text-control" data-rethink hidden>换个想法再看</button>
+      </div>
+    </div>
+  </section>`;
 }
 
-function renderCell(entry) {
-  outlet.innerHTML = intro(entry, '洋葱皮下面，有多少小格子？', '把同一张显微照片放大，再换一张叶片照片，用你看到的东西做判断。') + `
-    <section class="experiment" aria-labelledby="zoom-title">
-      <header class="section-heading"><h2 id="zoom-title">放大以后，视野里还剩什么？</h2></header>
-      <div class="station">
-        ${photoFigure('microscope', photographs.onion, '<span class="reticle" aria-hidden="true"></span>')}
-        <div class="controls">
-          <fieldset class="prediction">
-            <legend>你猜放大后，能数到的格子会怎样？</legend>
-            <div class="choice-row">
-              <button type="button" class="choice" data-predict="more" aria-pressed="false">变多</button>
-              <button type="button" class="choice" data-predict="less" aria-pressed="false">变少</button>
-              <button type="button" class="choice" data-predict="unsure" aria-pressed="false">还不确定</button>
-            </div>
-          </fieldset>
-          <button type="button" class="action" data-zoom aria-controls="microscope">放大框里的区域</button>
-          <p class="feedback" role="status" data-zoom-feedback></p>
-        </div>
-      </div>
-    </section>
-    <section class="transfer" aria-labelledby="compare-title">
-      <header class="section-heading"><h2 id="compare-title">换一种材料再看看</h2></header>
-      <div class="station">
-        <div class="compare-visual">
-          <figure class="specimen comparison-reference" hidden><div class="viewfinder"><img class="specimen-image" src="${photographs.onion.src}" alt="${photographs.onion.alt}" loading="lazy" decoding="async"></div><figcaption>洋葱表皮</figcaption></figure>
-          ${photoFigure('compare-scope', photographs.onion)}
-        </div>
-        <div class="controls">
-          <div class="choice-row lens-switch" role="group" aria-label="选择显微照片">
-            <button type="button" class="choice" data-sample="onion" aria-pressed="true">看洋葱表皮</button>
-            <button type="button" class="choice" data-sample="leaf" aria-pressed="false">看伊乐藻叶片</button>
-          </div>
-          <p class="feedback" role="status" data-sample-feedback></p>
-        </div>
-      </div>
-    </section>
-    <section class="reflection">
-      <h2>这两张图能告诉我们什么？</h2>
-      <p>两张图里都能找出一格格细胞。这两种材料的细胞外观有差别，只看其中一张图，没法判断所有植物细胞的样子。</p>
-      <p class="outside">图里的一条边线能帮我们分辨相邻细胞。只凭这张照片，还不能说已经看清细胞膜。</p>
-      <p class="credit">显微图分别拍摄。网页会裁切和放大照片，两张图不能直接用来比较尺寸。</p>
-      <details class="credit photo-credit"><summary>照片来源</summary>
-        <p>洋葱表皮 · <a href="https://www.flickr.com/photos/146824358@N03/33605021164/" target="_blank" rel="noopener noreferrer">Berkshire Community College Bioscience Image Library</a> · CC0 1.0。</p>
-        <p>伊乐藻叶片 · <a href="https://commons.wikimedia.org/wiki/File:Chloroplasts_-_Microscopic_view_of_Elodea_canadensis.jpg" target="_blank" rel="noopener noreferrer">Juan Carlos Fonseca Mata</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>。照片已缩小、裁切、转成 WebP。</p>
-      </details>
-    </section>` + following(entry);
-  const record = { ...state.cell };
-  if (!Object.hasOwn(photographs, record.sample)) record.sample = 'onion';
-  const viewfinder = outlet.querySelector('#microscope');
-  const zoomButton = outlet.querySelector('[data-zoom]');
-  const predictButtons = [...outlet.querySelectorAll('[data-predict]')];
-  const zoomFeedback = outlet.querySelector('[data-zoom-feedback]');
-  const locationFigure = document.createElement('figure');
-  locationFigure.className = 'zoom-location';
-  locationFigure.innerHTML = `<div>
-    <img src="${photographs.onion.src}" alt="原照片缩略图，方框是放大的位置。">
-    <span class="image-fallback" hidden>原图暂缺</span>
-    <span class="zoom-marker" aria-hidden="true"></span>
-  </div><figcaption>放大位置</figcaption>`;
-  viewfinder.after(locationFigure);
-  viewfinder.parentElement.classList.add('zoom-specimen');
-  const comparison = outlet.querySelector('#compare-scope');
-  const image = comparison.querySelector('img');
-  const sampleCaption = comparison.parentElement.querySelector('figcaption');
-  const sampleFeedback = outlet.querySelector('[data-sample-feedback]');
-  const sampleButtons = [...outlet.querySelectorAll('[data-sample]')];
-  let detail;
-
-  function updateZoom() {
-    const zoomed = record.zoomed === true;
-    viewfinder.style.setProperty('--zoom', zoomed ? '2.25' : '1');
-    viewfinder.querySelector('.reticle').hidden = zoomed;
-    locationFigure.hidden = !zoomed;
-    if (detail) detail.hidden = !zoomed;
-    zoomButton.textContent = zoomed ? '返回整片视野' : '放大框里的区域';
-    const text = zoomed ? '同一张照片里，框内的格子变大了，屏幕能容下的格子更少。'
-      : record.guess ? '留意框里和框外各有多少格。放大后再比一比。' : '也可以直接放大，用图来核对。';
-    zoomFeedback.textContent = text;
-    predictButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.predict === record.guess)));
-  }
-  async function requestDetail() {
-    if (detail) return;
-    detail = new Image();
-    detail.className = 'specimen-image zoom-detail';
-    detail.alt = '';
-    detail.setAttribute('aria-hidden', 'true');
-    detail.src = onionDetail;
-    try {
-      await detail.decode();
-      if (!viewfinder.isConnected) return;
-      detail.hidden = !record.zoomed;
-      viewfinder.append(detail);
-      viewfinder.querySelector('.image-fallback').hidden = true;
-    } catch {
-      detail = undefined;
-    }
-  }
-  function updateSample() {
-    const sample = photographs[record.sample];
-    if (image.getAttribute('src') !== sample.src) {
-      image.alt = sample.alt;
-      comparison.querySelector('.image-fallback').textContent = sample.alt;
-      image.src = sample.src;
-    }
-    sampleCaption.textContent = sample.caption;
-    outlet.querySelector('.comparison-reference').hidden = record.sample !== 'leaf';
-    outlet.querySelector('.compare-visual').classList.toggle('has-reference', record.sample === 'leaf');
-    sampleFeedback.textContent = record.sample === 'leaf'
-      ? '叶片里也有一格格细胞，有些格子里还能看到绿色小颗粒。'
-      : '先沿着一条边线找一格，再换叶片，看看边界还好不好找。';
-    sampleButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.sample === record.sample)));
-  }
-  function save() { state.cell = record; state.last = entry.id; saveState(); }
-  predictButtons.forEach(button => button.addEventListener('click', () => {
-    record.guess = button.dataset.predict;
-    updateZoom();
-    save();
-  }));
-  zoomButton.addEventListener('click', () => {
-    record.zoomed = !record.zoomed;
-    if (record.zoomed) requestDetail();
-    updateZoom();
-    save();
+function alignEvidence(host, control) {
+  if (!matchMedia('(max-width: 560px), (max-height: 465px)').matches) return;
+  requestAnimationFrame(() => {
+    if (!host.isConnected) return;
+    const chart = host.querySelector('.scene-illustration, .diagram-items').getBoundingClientRect();
+    const feedback = host.querySelector('.feedback').getBoundingClientRect();
+    const available = Math.min(window.innerHeight, window.visualViewport?.height || Infinity);
+    const bottom = Math.max(feedback.bottom, control?.getBoundingClientRect().bottom || 0);
+    const maximum = chart.top - 6;
+    const minimum = bottom - available + 6;
+    const shift = maximum >= minimum ? Math.max(minimum, Math.min(0, maximum)) : maximum;
+    if (Math.abs(shift) > 2) scrollBy({top: shift, behavior: 'instant'});
   });
-  sampleButtons.forEach(button => button.addEventListener('click', () => {
-    record.sample = button.dataset.sample;
-    updateSample();
+}
+
+function observePhoto(item, photo, onAvailability) {
+  const image = new Image();
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'photo-retry';
+  retry.textContent = '照片暂不可见 · 重试';
+  retry.hidden = true;
+  image.alt = photo.alt;
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  let retries = 0;
+  image.addEventListener('error', () => {
+    image.hidden = true;
+    retry.hidden = false;
+    retry.setAttribute('aria-label', '重试照片：' + photo.caption);
+    onAvailability(false);
+  });
+  image.addEventListener('load', () => {
+    const returnFocus = document.activeElement === retry;
+    image.hidden = false;
+    retry.hidden = true;
+    onAvailability(true);
+    if (returnFocus) {
+      const figure = item.closest('figure');
+      if (figure) {
+        figure.tabIndex = -1;
+        figure.focus({ preventScroll: true });
+      }
+    }
+  });
+  retry.addEventListener('click', () => {
+    image.src = photo.src + '?retry=' + ++retries;
+  });
+  image.src = photo.src;
+  item.append(image, retry);
+}
+
+function mountDiagram(entry, stage, index) {
+  const host = outlet.querySelector(`[data-scene="${index}"]`);
+  const board = host.querySelector('.diagram-items');
+  const feedback = host.querySelector('[role=status]');
+  const buttons = [...host.querySelectorAll('[data-choice]')];
+  const unsure = host.querySelector('[data-unsure]');
+  const reveal = host.querySelector('[data-reveal]');
+  const rethink = host.querySelector('[data-rethink]');
+  const records = plainRecord(state.guesses?.[entry.id]) ? state.guesses[entry.id] : {};
+  const record = plainRecord(records[index]) ? {...records[index]} : { guess: null, first: null, revealed: false };
+  // Imported selections may predate the current set of choices.
+  const isGuess = value => value === 'unsure' || (Number.isInteger(value) && Boolean(stage.choices[value]));
+  if (!isGuess(record.guess)) record.guess = null;
+  if (!isGuess(record.first)) record.first = null;
+  const needScene = stage.scene || ['plant-transport', 'photosynthesis', 'human-transport', 'aed-map'].includes(entry.id);
+  const scene = needScene && typeof globalThis.paintBioScene === 'function'
+    ? document.createElement('canvas') : null;
+  let revision = 0;
+  if (scene) {
+    scene.className = 'scene-illustration';
+    scene.setAttribute('aria-hidden', 'true');
+    board.before(scene);
+    board.classList.add('diagram-labels');
+  }
+
+  function save() {
+    records[index] = record;
+    state.guesses = { ...state.guesses, [entry.id]: records };
+    saveState();
+  }
+
+  function redraw() {
+    const displayRevision = ++revision;
+    const choice = record.revealed ? stage.choices[record.guess] : null;
+    const alternate = record.revealed && stage.choices[stage.revealChoice];
+    const items = choice?.items || (record.revealed && stage.revealItems) || alternate?.items || stage.items;
+    const description = choice?.description || (record.revealed && stage.revealDescription) || alternate?.description || stage.description;
+    const unavailable = new Set();
+    const message = choice?.feedback || (record.revealed ? stage.revealFeedback || alternate?.feedback || '在图里找一条能支持判断的记录。'
+      : record.guess === null ? '' : '记下了。打开记录核对。');
+    const first = stage.choices[record.first]?.label || (record.first === 'unsure' ? '还不确定' : '');
+    const revised = record.revealed && first && record.first !== record.guess && choice;
+    feedback.textContent = revised ? `起先选了「${first}」。${message}` : message;
+    function available(position, ok) {
+      if (displayRevision !== revision) return;
+      if (ok) unavailable.delete(position);
+      else unavailable.add(position);
+      feedback.textContent = unavailable.size
+        ? '有照片暂不可见。请重试，图下的文字是材料记录，不能当作你已经亲眼观察到的结果。'
+        : revised ? `起先选了「${first}」。${message}` : message;
+    }
+    board.replaceChildren(...items.map(([kind, label], position) => {
+      const item = document.createElement('li');
+      item.dataset.focus = String(choice?.focus?.includes(position) === true);
+      if (!scene && kind.endsWith('-photo') && photographs[kind.slice(0, -6)]) {
+        observePhoto(item, photographs[kind.slice(0, -6)], ok => available(position, ok));
+      } else if (!scene && typeof globalThis.paintBioDiagram === 'function') {
+        const drawing = document.createElement('canvas');
+        drawing.setAttribute('aria-hidden', 'true');
+        drawing.style.aspectRatio = '192 / 138';
+        globalThis.paintBioDiagram(setCanvasSize(drawing, 192, 138), kind);
+        item.append(drawing);
+      }
+      const text = document.createElement('span');
+      text.textContent = label;
+      item.append(text);
+      return item;
+    }));
+    if (scene) {
+      scene.style.aspectRatio = '560 / 204';
+      const sceneChoice = choice ? choice.scene ?? record.guess : record.revealed ? stage.revealScene ?? stage.revealChoice ?? null : null;
+      globalThis.paintBioScene(setCanvasSize(scene, 560, 204), entry.id, index, sceneChoice);
+    }
+    const text = host.querySelector('.scene-description');
+    text.textContent = description || '';
+    text.hidden = !description;
+    text.classList.toggle('sr-only', needScene ? Boolean(scene) : typeof globalThis.paintBioDiagram === 'function');
+    buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === record.guess)));
+    unsure.setAttribute('aria-pressed', String(record.guess === 'unsure'));
+    reveal.hidden = record.revealed === true;
+    rethink.hidden = record.revealed !== true;
+  }
+
+  function choose(value) {
+    record.guess = value;
+    if (record.first === null || record.first === undefined) record.first = value;
     save();
+    redraw();
+    if (record.revealed) alignEvidence(host, value === 'unsure' ? unsure : buttons[value]);
+  }
+  buttons.forEach((button, option) => button.addEventListener('click', () => choose(option)));
+  unsure.addEventListener('click', () => choose('unsure'));
+  reveal.addEventListener('click', () => {
+    record.revealed = true;
+    save();
+    redraw();
+    rethink.focus({ preventScroll: true });
+    alignEvidence(host, rethink);
+  });
+  rethink.addEventListener('click', () => {
+    record.guess = null;
+    record.revealed = false;
+    save();
+    redraw();
+    buttons[0].focus({ preventScroll: true });
+  });
+  redraw();
+}
+
+function renderDiagramLesson(entry, data) {
+  const demo = renderDiagramSection(data.stages[0], 0);
+  const transfer = `<details class="more-activity"><summary>再看一份材料</summary>${renderDiagramSection(data.stages[1], 1)}</details>`;
+  const workshop = entry.project && typeof renderProjectLab === 'function' ? renderProjectLab(entry) : '';
+  outlet.innerHTML = intro(entry, data.question) + (workshop
+    ? workshop + `<details class="more-activity project-examples"><summary>需要时看一个例子</summary>${demo}${transfer}</details>`
+    : demo + transfer) + renderLearningAdditions(entry, data.summary, data.outside) + following(entry);
+  data.stages.forEach((stage, index) => mountDiagram(entry, stage, index));
+  if (entry.project && typeof mountProjectLab === 'function') mountProjectLab(entry);
+  mountLearningAdditions(entry);
+}
+
+function renderQuiz(entry, name, activity) {
+  const title = name === 'evidence' ? '从材料里找线索' : '换个例子再试';
+  return `<section class="quick-check" data-quiz="${name}" aria-labelledby="${name}-title">
+    <h3 id="${name}-title">${title}</h3>
+    <fieldset><legend>${escape(activity.question)}</legend>
+      ${activity.correct.length > 1 ? '<p class="quiz-instruction">可以选多条线索。</p>' : ''}
+      <div class="check-options">${activity.options.map((label, i) =>
+        `<button type="button" data-answer="${i}" aria-pressed="false">${escape(label)}</button>`).join('')}
+      <button type="button" data-answer="unsure" aria-pressed="false">我还不确定</button></div>
+    </fieldset>
+    <button type="button" class="action" data-check>核对线索</button>
+    <p class="feedback" role="status"></p>
+  </section>`;
+}
+
+function renderEvidenceChallenge(entry) {
+  if (entry.id === 'plant-transport') return `<details class="more-activity" data-xylem-detail><summary>看看实拍里的导管</summary>
+    <figure class="xylem-photo"><div data-xylem-photo></div><figcaption>另一份芹菜材料的显微实拍。蓝色的螺旋纹是导管壁上的结构，可帮助辨认导管。</figcaption></figure>
+    <p class="credit">Tmatheus · <a href="https://commons.wikimedia.org/wiki/File:Helical_Protoxylem_of_Celery.png" target="_blank" rel="noopener">显微照片原作</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>，缩小并转为 WebP。</p></details>`;
+  if (entry.id === 'research-methods') return `<section class="quick-check">
+    <h3>自己量一次</h3><p>甲豆苗从 4 厘米长到 6 厘米。记录时只写新增的长度。</p>
+    <form data-difference class="numeric-reading"><label for="height-difference">新增</label><input id="height-difference" type="number" min="0" inputmode="numeric" step="1" required><span>厘米</span><button type="submit">核对</button></form>
+    <p class="feedback" role="status"></p></section>`;
+  if (entry.id !== 'human-transport') return '';
+  return `<section class="quick-check" data-route-practice>
+    <h3>接上回心脏的路</h3><p>血液刚经过脚趾的毛细血管。按它接下来经过的顺序，点出两段路。</p>
+    <div class="choice-row"><button type="button" data-step="atrium">右心房</button><button type="button" data-step="vein">静脉</button><button type="button" data-step="artery">动脉</button></div>
+    <p class="route-order" aria-live="polite">脚趾的毛细血管 → …</p>
+    <button type="button" data-reset-route hidden>重新接这段路</button><p class="feedback" role="status"></p></section>`;
+}
+
+function mountEvidenceChallenge(entry) {
+  const xylem = outlet.querySelector('[data-xylem-detail]');
+  if (xylem) xylem.addEventListener('toggle', () => {
+    const photo = xylem.querySelector('[data-xylem-photo]');
+    if (xylem.open && !photo.firstChild) observePhoto(photo, {
+      src: './assets/celery-xylem.webp', alt: '淡色背景上一段蓝染的螺旋导管壁。', caption: '芹菜导管的显微照片',
+    }, () => {});
+  });
+  const form = outlet.querySelector('[data-difference]');
+  if (form) form.addEventListener('submit', event => {
+    event.preventDefault();
+    const measured = form.querySelector('input').valueAsNumber;
+    form.nextElementSibling.textContent = measured === 2 ? '对。6 减 4，甲豆苗新增了 2 厘米。' : '再看两个读数。新增的长度是后一次减去前一次。';
+    if (measured === 2) markPracticed(entry);
+  });
+  const task = outlet.querySelector('[data-route-practice]');
+  if (!task) return;
+  const choices = [...task.querySelectorAll('[data-step]')];
+  const reset = task.querySelector('[data-reset-route]');
+  const order = [];
+  function update() {
+    task.querySelector('.route-order').textContent = '脚趾的毛细血管 → ' + (order.map(step => step.textContent).join(' → ') || '…');
+    const finished = order.length === 2;
+    const correct = finished && order[0].dataset.step === 'vein' && order[1].dataset.step === 'atrium';
+    task.querySelector('.feedback').textContent = !finished ? '' : correct
+      ? '接上了。经过脚趾组织后，血液沿静脉回到右心房。'
+      : '留意箭头的方向。题目问的是经过脚趾以后，怎么回到心脏。';
+    reset.hidden = order.length === 0;
+    choices.forEach(button => { button.disabled = order.includes(button) || finished; });
+    if (correct) markPracticed(entry);
+  }
+  choices.forEach(button => button.addEventListener('click', () => {
+    order.push(button);
+    update();
+    (choices.find(choice => !choice.disabled) || reset).focus({ preventScroll: true });
   }));
-  outlet.querySelectorAll('.viewfinder:has(> .image-fallback)').forEach(bindPhotoFallback);
-  bindPhotoFallback(locationFigure);
-  if (record.zoomed) requestDetail();
-  updateZoom();
-  updateSample();
+  reset.addEventListener('click', () => { order.length = 0; update(); choices[0].focus({ preventScroll: true }); });
+}
+
+function renderLearningAdditions(entry, summary = '', outside = '') {
+  const data = globalThis.bioRevisions?.[entry.id];
+  if (!data) return summary ? `<section class="reflection"><h2>学到了什么</h2><p>${escape(summary)}</p></section>` : '';
+  return `<section class="learning-zone">
+    <details class="concept-note"><summary>把看到的现象和课本连起来</summary>
+      <p>${escape(data.concept || summary)}</p>
+      <button type="button" class="text-control listen-tip" data-listen>听找线索的题目</button>
+      <span class="audio-feedback" role="status"></span>
+    </details>
+    ${data.evidence ? renderQuiz(entry, 'evidence', data.evidence) : ''}
+    ${renderEvidenceChallenge(entry)}
+    <details class="more-activity"><summary>写一句我找到的证据</summary>
+      <label for="evidence-note">我看到……，所以我暂时认为……</label>
+      <textarea id="evidence-note" rows="2" maxlength="400"></textarea>
+      <p class="note-status" role="status">可以只写一句，也可以口头说给家人听。</p>
+    </details>
+    ${data.transfer ? `<details class="more-activity transfer-practice"><summary>换个例子复习</summary>${renderQuiz(entry, 'transfer', data.transfer)}</details>` : ''}
+    ${outside ? `<p class="outside">${escape(outside)}</p>` : ''}
+  </section>`;
+}
+
+function mountLearningAdditions(entry) {
+  const data = globalThis.bioRevisions?.[entry.id];
+  if (!data) return;
+  mountEvidenceChallenge(entry);
+  const note = outlet.querySelector('#evidence-note');
+  if (note) {
+    note.value = typeof state.notes?.[entry.id] === 'string' ? state.notes[entry.id] : '';
+    note.addEventListener('input', () => {
+      state.notes = { ...state.notes, [entry.id]: note.value };
+      outlet.querySelector('.note-status').textContent = saveState() ? '这句话已保存在这台设备。' : '这句话目前留在本页，可以复制带走。';
+    });
+  }
+  for (const name of ['evidence', 'transfer']) {
+    const section = outlet.querySelector(`[data-quiz="${name}"]`);
+    if (!section) continue;
+    const activity = data[name];
+    const options = [...section.querySelectorAll('[data-answer]')];
+    const feedback = section.querySelector('.feedback');
+    const previous = name === 'evidence' ? state.reviews?.[entry.id]?.evidence : null;
+    const chosen = new Set(Array.isArray(previous) ? previous.filter(value => options.some(option => option.dataset.answer === value)) : []);
+    for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
+    options.forEach(button => button.addEventListener('click', () => {
+      const value = button.dataset.answer;
+      if (value === 'unsure' || activity.correct.length === 1) {
+        const wasChosen = chosen.has(value);
+        chosen.clear();
+        if (!wasChosen) chosen.add(value);
+      } else {
+        chosen.delete('unsure');
+        if (chosen.has(value)) chosen.delete(value);
+        else chosen.add(value);
+      }
+      for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
+      feedback.textContent = '';
+      if (name === 'evidence') {
+        state.reviews = { ...state.reviews, [entry.id]: { evidence: [...chosen] } };
+        saveState();
+      }
+    }));
+    section.querySelector('[data-check]').addEventListener('click', () => {
+      if (!chosen.size || chosen.has('unsure')) {
+        feedback.textContent = `可以先看看这个提示，再试一次。${activity.hint || '先找一条能回答问题的观察记录。'}`;
+        return;
+      }
+      const correct = activity.correct.length === chosen.size && activity.correct.every(i => chosen.has(String(i)));
+      const photoStation = entry.id === 'cell' && name === 'evidence';
+      const photoUnavailable = photoStation && Boolean(outlet.querySelector('[data-photo][data-image-status="failed"]'));
+      const openPlantSample = photoStation && outlet.querySelector('[data-sample=leaf][aria-pressed="true"]');
+      const qualifier = photoUnavailable ? '照片暂不可见，这次先根据题目里的文字记录判断。'
+        : photoStation && !openPlantSample ? '想用照片再核对，可在上方切回伊乐藻。' : '';
+      feedback.textContent = (correct ? photoUnavailable ? '选择和文字记录吻合。' : '这次判断和材料吻合。' : '这次的证据还不够。') + qualifier + activity.explain;
+      if (name === 'evidence' || correct) markPracticed(entry);
+    });
+  }
+  const listen = outlet.querySelector('[data-listen]');
+  if (listen) listen.addEventListener('click', async () => {
+    const feedback = outlet.querySelector('.audio-feedback');
+    playingPrompt?.pause();
+    listen.disabled = true;
+    const audio = playingPrompt = new Audio(`./assets/audio/${entry.id}.m4a`);
+    audio.addEventListener('ended', () => { listen.disabled = false; feedback.textContent = ''; });
+    audio.addEventListener('error', () => { listen.disabled = false; feedback.textContent = '朗读暂时无法播放，可以继续看文字。'; });
+    try {
+      await audio.play();
+      feedback.textContent = '正在播放观察提示。';
+    } catch {
+      listen.disabled = false;
+      feedback.textContent = '朗读暂时无法播放，可以继续看文字。';
+    }
+  });
+}
+
+function downloadProgress() {
+  const blob = new Blob([JSON.stringify({ version: 1, progress: state }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = Object.assign(document.createElement('a'), { href: url, download: '生物实验台学习记录.json' });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function mergeProjects(local, incoming) {
+  const merged = { ...local };
+  const limit = typeof PROJECT_HISTORY_LIMIT === 'number' ? PROJECT_HISTORY_LIMIT : 6;
+  for (const [id, record] of Object.entries(incoming)) {
+    if (!plainRecord(record)) continue;
+    const current = plainRecord(merged[id]) ? merged[id] : {};
+    const values = draft => plainRecord(draft) ? Object.values(draft) : [];
+    const hasDraft = draft => values(draft).some(value => Array.isArray(value) ? value.length > 0 : Boolean(value));
+    const versions = item => Array.isArray(item.versions) ? item.versions : [];
+    const usable = entry => Number.isFinite(entry?.time) && entry.time > 0 && entry.time <= 8640000000000000 && plainRecord(entry.draft);
+    const draft = hasDraft(current.draft) ? current.draft : record.draft;
+    const pool = [...versions(current).filter(usable), ...versions(record).filter(usable)];
+    if (draft === current.draft && hasDraft(record.draft)) pool.push({time: Date.now(), draft: record.draft});
+    const duplicates = new Set();
+    const saved = pool.filter(item => {
+      const signature = JSON.stringify(item.draft);
+      if (duplicates.has(signature)) return false;
+      duplicates.add(signature);
+      return true;
+    }).slice(0, limit);
+    saved.sort((a,b) => b.time - a.time);
+    merged[id] = {draft, versions:saved};
+  }
+  return merged;
+}
+
+function renderHome() {
+  const last = byId.get(state.last);
+  const next = last || sequence[0];
+  const count = sequence.filter(entry => state.practiced?.[entry.id] === true).length;
+  document.title = '生物实验台 · 北京版七年级上册';
+  outlet.innerHTML = `<section class="home-entry">
+    <p class="eyebrow">北京版 · 七年级上册</p>
+    <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
+    <p class="intro-copy">看一张图或一组记录，自己挑出能说明问题的线索。</p>
+    <nav class="lesson-next"><a class="next-lesson" href="${route(next.id)}">
+      <span><small>${last ? '继续上次读到的课' : '从课本第一课开始'}</small><strong>${escape(next.title)}</strong></span><span aria-hidden="true">→</span>
+    </a></nav>
+    ${count ? `<p class="progress-count">做过 ${count} 项练习，可以从课本目录回看。</p>` : ''}
+    ${!last ? `<a class="sample-link" href="${route('cell')}">先试一下显微镜</a>` : ''}
+  </section>
+  <details class="more-activity progress-tools"><summary>学习记录备份</summary>
+    <p>记录保存在当前浏览器。下载后，可以在另一台设备打开同一网站导入。</p>
+    <button type="button" data-export>下载记录</button>
+    <label for="progress-import">导入以前的记录</label>
+    <input type="file" id="progress-import" accept=".json,application/json">
+    <p role="status" data-import-result></p>
+  </details>`;
+  outlet.querySelector('[data-export]').addEventListener('click', downloadProgress);
+  outlet.querySelector('#progress-import').addEventListener('change', async event => {
+    const picker = event.currentTarget;
+    const feedback = outlet.querySelector('[data-import-result]');
+    const file = picker.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 250000) throw new Error('size');
+      const saved = JSON.parse(await file.text());
+      if (saved.version !== 1 || !plainRecord(saved.progress)) throw new Error('format');
+      const imported = cleanState(saved.progress);
+      for (const [key, value] of Object.entries(imported)) {
+        if (key === 'last' && !picker.isConnected) continue;
+        if (key === 'projects') state.projects = mergeProjects(state.projects, value);
+        else state[key] = plainRecord(value) ? { ...value, ...state[key] } : value;
+      }
+      const persisted = saveState();
+      if (!picker.isConnected) return;
+      renderHome();
+      updateDirectory();
+      outlet.querySelector('.progress-tools').open = true;
+      outlet.querySelector('[data-import-result]').textContent = persisted ? '记录已导入。' : '记录已在本页打开，浏览器暂时无法保存。';
+    } catch {
+      feedback.textContent = '这份文件读不了。请选择从生物实验台下载的 JSON 记录。';
+    }
+  });
+}
+
+function showRecovery(entry, unknown = false) {
+  const title = unknown ? '没找到这一课' : '这节课的材料暂时没载入';
+  document.title = title + ' · 生物实验台';
+  outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">${title}</h1>
+    <p>${entry ? `还可以先翻纸书。课本第 ${entry.page} 页 · ${escape(entry.title)}。` : '可以从课本目录重新选一课。'}</p>
+    ${unknown ? '' : '<button type="button" class="action" data-reload>重新载入</button>'}
+    <button type="button" data-open-directory>打开课本目录</button>
+  </section>`;
+  outlet.querySelector('[data-reload]')?.addEventListener('click', () => location.reload());
+  outlet.querySelector('[data-open-directory]').addEventListener('click', () => {
+    directory.open = true;
+    directorySummary.focus();
+  });
 }
 
 function render(focus = false) {
-  const id = location.hash.startsWith('#/lesson/') ? location.hash.slice(9) : state.last;
-  const entry = sequence.find(item => item.id === id) ?? sequence[0];
-  renderDirectory(entry.id);
-  if (entry.id === 'cell') renderCell(entry);
-  else renderDiagramLesson(entry, lessonData[entry.id]);
-  document.title = entry.title + ' · 生物实验台';
+  playingPrompt?.pause();
+  playingPrompt = undefined;
+  const hash = location.hash;
+  const isHome = !hash || hash === '#/' || hash === '#lesson' || hash === '#directory';
+  const entry = hash.startsWith('#/lesson/') ? byId.get(hash.slice(9)) : null;
+  if (isHome) {
+    renderHome();
+    updateDirectory();
+  } else if (!entry) {
+    showRecovery(null, true);
+    updateDirectory();
+  } else {
+    directory.open = false;
+    state.last = entry.id;
+    state.viewed = { ...state.viewed, [entry.id]: true };
+    saveState();
+    updateDirectory(entry.id);
+    document.title = entry.title + ' · 生物实验台';
+    try {
+      const data = lessonData[entry.id];
+      if (entry.id === 'cell') {
+        if (typeof renderCell !== 'function') throw new Error('cell');
+        renderCell(entry);
+      } else {
+        if (!data) throw new Error('lesson data');
+        renderDiagramLesson(entry, data);
+      }
+    } catch (error) {
+      console.warn('Could not render this biology lesson', entry.id, error);
+      showRecovery(entry);
+    }
+  }
   if (focus) {
     scrollTo(0, 0);
-    outlet.querySelector('h1').focus({ preventScroll: true });
+    outlet.querySelector('h1')?.focus({ preventScroll: true });
   }
 }
 
-outlet.addEventListener('click', event => {
-  const next = event.target.closest('[data-next] a')?.parentElement.dataset.next;
-  if (next) { state.last = next; saveState(); }
+directory.addEventListener('click', event => {
+  if (event.target.closest('a')) directory.open = false;
+});
+directory.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && directory.open) {
+    event.preventDefault();
+    directory.open = false;
+    directorySummary.focus();
+  }
 });
 document.querySelector('.skip').addEventListener('click', event => {
   event.preventDefault();
