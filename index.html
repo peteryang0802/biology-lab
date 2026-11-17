@@ -7,18 +7,20 @@
   <meta name="theme-color" content="#f6f3ea">
   <meta name="robots" content="noindex">
   <title>生物实验台 · 北京版七年级上册</title>
+  <link rel="icon" type="image/png" href="./favicon.png" sizes="32x32">
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./course.css">
+  <link rel="stylesheet" href="./course.css?v=2">
   <script defer src="./unit-one.js"></script>
   <script defer src="./unit-two.js"></script>
   <script defer src="./diagrams.js"></script>
   <script defer src="./scenes.js"></script>
-  <script defer src="./app.js"></script>
+  <script defer src="./app.js?v=2"></script>
 </head>
 <body>
+  <a class="skip" href="#lesson">跳到本课内容</a>
   <header class="site-header">
     <div class="wrap">
-      <div class="brand"><span class="brand-icon" aria-hidden="true">◉</span><span class="brand-text">生物实验台</span></div>
+      <a class="brand" href="#/" aria-label="生物实验台，返回学习入口"><span class="brand-icon" aria-hidden="true">◉</span><span class="brand-text">生物实验台</span></a>
       <div class="edition">北京版 · 七年级上册</div>
     </div>
   </header>
@@ -27,7 +29,7 @@
       <summary>课本目录</summary>
       <div id="contents"></div>
     </details>
-    <article id="lesson" aria-labelledby="lesson-title"></article>
+    <article id="lesson" aria-labelledby="lesson-title" tabindex="-1"></article>
     <noscript>打开浏览器的 JavaScript 后，就能使用图中的互动。</noscript>
   </main>
   <footer class="site-footer"><div class="wrap">北京出版社 · 七年级上册配套观察与实验</div></footer>

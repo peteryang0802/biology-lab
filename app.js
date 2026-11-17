@@ -184,13 +184,18 @@ function photoFigure(id, item, extra = '') {
     </div><figcaption>${item.caption}</figcaption></figure>`;
 }
 
-function bindPhotoFallback(figure) {
-  const img = figure.querySelector('img');
-  const placeholder = figure.querySelector('.image-fallback');
-  const show = () => { placeholder.hidden = false; img.hidden = true; };
-  img.addEventListener('error', show);
-  img.addEventListener('load', () => { placeholder.hidden = true; img.hidden = false; });
-  if (img.complete && img.currentSrc && !img.naturalWidth) show();
+function bindPhotoFallback(frame) {
+  const img = frame.querySelector('img');
+  const placeholder = frame.querySelector('.image-fallback');
+  const marker = frame.querySelector('.zoom-marker');
+  function update(missing) {
+    img.hidden = missing;
+    placeholder.hidden = !missing;
+    if (marker) marker.hidden = missing;
+  }
+  img.addEventListener('error', () => update(true));
+  img.addEventListener('load', () => update(false));
+  if (img.complete && img.getAttribute('src') && !img.naturalWidth) update(true);
 }
 
 function renderCell(entry) {
@@ -247,7 +252,11 @@ function renderCell(entry) {
   const zoomFeedback = outlet.querySelector('[data-zoom-feedback]');
   const locationFigure = document.createElement('figure');
   locationFigure.className = 'zoom-location';
-  locationFigure.innerHTML = `<div><img src="${photographs.onion.src}" alt="原照片缩略图，方框是放大的位置。"><span aria-hidden="true"></span></div><figcaption>放大位置</figcaption>`;
+  locationFigure.innerHTML = `<div>
+    <img src="${photographs.onion.src}" alt="原照片缩略图，方框是放大的位置。">
+    <span class="image-fallback" hidden>原图暂缺</span>
+    <span class="zoom-marker" aria-hidden="true"></span>
+  </div><figcaption>放大位置</figcaption>`;
   viewfinder.after(locationFigure);
   viewfinder.parentElement.classList.add('zoom-specimen');
   const comparison = outlet.querySelector('#compare-scope');
@@ -318,7 +327,8 @@ function renderCell(entry) {
     updateSample();
     save();
   }));
-  outlet.querySelectorAll('.specimen:has(.image-fallback)').forEach(bindPhotoFallback);
+  outlet.querySelectorAll('.viewfinder:has(> .image-fallback)').forEach(bindPhotoFallback);
+  bindPhotoFallback(locationFigure);
   if (record.zoomed) requestDetail();
   updateZoom();
   updateSample();
@@ -340,6 +350,11 @@ function render(focus = false) {
 outlet.addEventListener('click', event => {
   const next = event.target.closest('[data-next] a')?.parentElement.dataset.next;
   if (next) { state.last = next; saveState(); }
+});
+document.querySelector('.skip').addEventListener('click', event => {
+  event.preventDefault();
+  outlet.scrollIntoView({ block: 'start' });
+  outlet.focus({ preventScroll: true });
 });
 addEventListener('hashchange', () => render(true));
 render();

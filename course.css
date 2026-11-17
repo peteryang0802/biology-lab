@@ -1,4 +1,6 @@
 .directory { margin: 0 0 16px; }
+.brand { min-height: 44px; }
+.brand:hover .brand-text { text-decoration: underline; }
 .directory > summary { width: fit-content; min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--accent-deep); font-weight: 700; }
 .directory > summary::before { content: ""; width: .6em; height: .6em; border: solid currentColor; border-width: 0 2px 2px 0; rotate: -45deg; }
 .directory[open] > summary::before { rotate: 45deg; }
@@ -39,7 +41,8 @@
 .zoom-location { position: absolute; top: 8px; right: 9px; margin: 0; width: clamp(55px, 18%, 95px); color: #fffdf7; }
 .zoom-location > div { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 1px solid #e4d49f; }
 .zoom-location img { width: 100%; height: 100%; object-fit: cover; }
-.zoom-location span { position: absolute; inset: 28%; border: 1px dashed #fff3c2; }
+.zoom-marker { position: absolute; inset: 28%; border: 1px dashed #fff3c2; }
+.zoom-location .image-fallback { padding: 2px; font-size: .68rem; }
 .zoom-location figcaption { font-size: .69rem; margin-top: 3px; }
 .compare-visual { display: grid; min-width: 0; background: #13211d; }
 .compare-visual.has-reference { grid-template-columns: 1fr 1fr; }
