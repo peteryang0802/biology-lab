@@ -236,22 +236,16 @@ button.cell-reticle:focus-visible,
   font-size: .81rem;
   line-height: 1.38;
 }
-.cell-model {
+.cell-plant-model { width: min(100%, 176px); height: auto; }
+.cell-model-animal {
   width: min(90%, 94px);
   aspect-ratio: 1.3;
   position: relative;
-  border: 4px solid #46765a;
-  border-radius: 12px;
-  background: #dce9b8;
+  border: 2px solid #816558;
+  border-radius: 57% 49% 60% 42%;
+  background: #ecd9ba;
 }
-.cell-model::before {
-  position: absolute;
-  inset: 2px;
-  content: "";
-  border: 1px solid #54725a;
-  border-radius: 7px;
-}
-.cell-model i {
+.cell-model-animal i {
   position: absolute;
   top: 29%;
   left: 49%;
@@ -261,12 +255,6 @@ button.cell-reticle:focus-visible,
   border-radius: 50%;
   background: #b792a4;
 }
-.cell-model-animal {
-  border: 2px solid #816558;
-  border-radius: 57% 49% 60% 42%;
-  background: #ecd9ba;
-}
-.cell-model-animal::before { display: none; }
 .cell-optic-grid {
   display: grid;
   grid-template-columns: minmax(80px, .65fr) minmax(0, 1.45fr);
@@ -363,4 +351,11 @@ button.cell-reticle:focus-visible,
 @media (max-height: 450px) and (orientation: landscape) {
   .cell-microscope .cell-photo:not(.cell-photo-mini) { width: min(100%, 144px); }
   .cell-samples .cell-photo { width: min(100%, 128px); }
+}
+
+@media (min-width: 480px) and (max-height: 450px) and (orientation: landscape) {
+  .cell-lab .cell-zoom-station { grid-template-columns: minmax(0, .44fr) minmax(0, .56fr); }
+  .cell-zoom-station .cell-microscope { border-radius: 18px 0 0 18px; padding: 8px; }
+  .cell-zoom-station .cell-is-zoomed { grid-template-columns: minmax(0, 1fr) clamp(44px, 8.5vw, 56px); gap: 6px; }
+  .cell-zoom-station .cell-photo-mini { position: static; width: 100%; }
 }

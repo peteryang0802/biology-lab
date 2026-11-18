@@ -8,54 +8,74 @@ function renderTermAudio() {
 }
 
 function mountTermAudio(host, entry) {
-  const button = host.querySelector('[data-term-listen]');
-  const message = host.querySelector('[data-term-audio-status]');
-  let audio;
-  let starting = false;
+  mountPromptAudio(host.querySelector('[data-term-listen]'), host.querySelector('[data-term-audio-status]'), entry.id);
+}
 
-  function reset() {
-    button.textContent = '听题';
+function mountPromptAudio(button, message, id) {
+  const label = button.textContent;
+  const audioVersion = ['photosynthesis', '7b-plant-breathing', '8b-eco-bottle', '8b-ecosystem', '8b-first-aid'].includes(id) ? 6 : 5;
+  let audio;
+  let timeout;
+
+  function clearPending() {
+    clearTimeout(timeout);
+    timeout = undefined;
     button.removeAttribute('aria-busy');
-    message.textContent = '';
-    starting = false;
   }
 
+  function stop(text = '') {
+    clearPending();
+    if (audio) {
+      const previous = audio;
+      audio = undefined;
+      previous.pause();
+      previous.removeAttribute('src');
+      previous.load();
+    }
+    if (playingPrompt === playback) playingPrompt = undefined;
+    button.textContent = label;
+    message.textContent = text;
+  }
+
+  const playback = { stop };
+  const unavailable = '朗读暂时无法播放。可以再点一次，或阅读题目。';
   button.addEventListener('click', async () => {
-    if (starting) return;
-    if (audio && !audio.paused) {
-      audio.pause();
+    if (timeout !== undefined) {
+      stop();
       return;
     }
-    if (!audio) {
-      audio = new Audio(`./assets/audio/${entry.id}.m4a?v=5`);
-      audio.addEventListener('pause', () => {
-        if (audio.ended) return;
-        button.textContent = '继续朗读';
-        message.textContent = '已暂停';
-      });
-      audio.addEventListener('ended', reset);
+    if (audio && !audio.paused) {
+      audio.pause();
+      button.textContent = '继续朗读';
+      message.textContent = '已暂停';
+      return;
     }
-    playingPrompt?.pause();
-    playingPrompt = audio;
-    starting = true;
+
+    if (playingPrompt !== playback) playingPrompt?.stop();
+    playingPrompt = playback;
+    if (!audio) {
+      audio = new Audio(`./assets/audio/${id}.m4a?v=${audioVersion}`);
+      const media = audio;
+      media.addEventListener('error', () => {
+        if (audio === media) stop(unavailable);
+      });
+      media.addEventListener('ended', () => {
+        if (audio === media) stop();
+      });
+    }
+    const media = audio;
+    button.textContent = '取消朗读';
     button.setAttribute('aria-busy', 'true');
     message.textContent = '正在准备朗读……';
+    timeout = setTimeout(() => stop('朗读加载超时。可以再点一次，或阅读题目。'), 5000);
     try {
-      await audio.play();
-      if (!host.isConnected || playingPrompt !== audio) {
-        audio.pause();
-        return;
-      }
+      await media.play();
+      if (audio !== media) return;
+      clearPending();
       button.textContent = '暂停朗读';
       message.textContent = '正在朗读';
     } catch {
-      if (!host.isConnected) return;
-      audio = undefined;
-      reset();
-      message.textContent = '朗读暂时无法播放。可以再点一次，或阅读题目。';
-    } finally {
-      starting = false;
-      button.removeAttribute('aria-busy');
+      if (audio === media) stop(unavailable);
     }
   });
 }

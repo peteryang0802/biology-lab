@@ -309,10 +309,11 @@ function renderAnimalLab() {
 
 function renderChainLab() {
   return `<section class="extra-lab" data-visual-lab="chain" aria-label="在图上连接食物链">
-    <p class="lab-instruction">依次点三张图，从能利用光制造有机物的生物开始。箭头要跟着食物里的能量走。</p>
+    <p class="lab-instruction">点卡片连出能量流向。可以先连一段取食关系，再补全食物链。</p>
     <div class="chain-pool" aria-label="可以加入食物链的生物">
       ${Object.entries(chainOrganisms).map(([id, item]) => `<button type="button" class="lab-organism" data-chain-pick="${id}" aria-pressed="false">
         <canvas width="70" height="40" aria-hidden="true"></canvas><strong>${item.name}</strong><small>${item.clue}</small>
+        ${id === 'grass' ? '<small class="chain-placement" hidden></small>' : ''}
       </button>`).join('')}
     </div>
     <div class="chain-preview" aria-label="我连的食物链">
@@ -333,13 +334,17 @@ function renderChainLab() {
 function renderTreeLab() {
   return `<section class="extra-lab" data-visual-lab="tree" aria-label="摆一棵简化进化树">
     <p class="lab-instruction">点两张卡，再选它们都有的特征。先找能把最小一组单独分出来的线索。</p>
-    <div class="tree-pool" aria-label="可连接的动物或分枝" data-tree-pool></div>
-    <div class="tree-traits" aria-label="可比较的特征">
-      ${['羽毛', '四肢', '脊柱', '鳍'].map(trait => `<button type="button" class="choice" data-tree-trait="${trait}">${trait}</button>`).join('')}
+    <div class="tree-controls">
+      <div class="tree-pool" aria-label="可连接的动物或分枝" data-tree-pool></div>
+      <div class="tree-traits" aria-label="可比较的特征">
+        ${['羽毛', '四肢', '脊柱', '鳍'].map(trait => `<button type="button" class="choice" data-tree-trait="${trait}">${trait}</button>`).join('')}
+      </div>
     </div>
-    <p class="activity-feedback" data-visual-feedback role="status"></p>
+    <div class="tree-result">
+      <p class="activity-feedback" data-visual-feedback role="status"></p>
+      <div data-tree-preview hidden></div>
+    </div>
     <button type="button" class="text-control lab-hint" data-tree-restart hidden>重新摆</button>
-    <div data-tree-preview hidden></div>
   </section>`;
 }
 
@@ -378,6 +383,15 @@ function renderExtraLab(entry) {
   return '';
 }
 
+function keepLabVisible(lab, control, feedback) {
+  const viewport = Math.min(innerHeight, visualViewport?.height ?? innerHeight);
+  if (lab.getBoundingClientRect().height <= viewport - 16) {
+    lab.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  } else {
+    keepActivityFeedbackVisible(control, feedback);
+  }
+}
+
 function mountAnimalLab(lab, values, save, complete) {
   const feedback = lab.querySelector('[data-visual-feedback]');
   const buttons = [...lab.querySelectorAll('[data-animal]')];
@@ -399,34 +413,61 @@ function mountAnimalLab(lab, values, save, complete) {
       feedback.textContent = '找对了。鲫鱼的椎骨连在体内，小虾的分节在体表。可以用内部结构判断有没有脊柱。';
       complete();
     }
-    keepActivityFeedbackVisible(button, feedback, lab);
+    keepLabVisible(lab, button, feedback);
   }));
   lab.querySelector('[data-animal-hint]').addEventListener('click', event => {
     feedback.textContent = '先看看 A、B 标在哪里。鱼图要找体内的结构，虾图要找体表的结构。';
-    keepActivityFeedbackVisible(event.currentTarget, feedback);
+    keepLabVisible(lab, event.currentTarget, feedback);
   });
 }
 
-function mountChainLab(lab, values, save, complete) {
+function mountChainLab(lab, values, save, complete, legacyItems) {
   const feedback = lab.querySelector('[data-visual-feedback]');
   const slots = [...lab.querySelectorAll('[data-chain-slot]')];
   const arrows = [...lab.querySelectorAll('[data-chain-arrow]')];
   const undo = lab.querySelector('[data-chain-undo]');
   const buttons = [...lab.querySelectorAll('[data-chain-pick]')];
+  const placement = lab.querySelector('.chain-placement');
   const correct = ['grass', 'locust', 'frog'];
-  const chain = Array.isArray(values.chain) ? [...new Set(values.chain.filter(id => typeof id === 'string' && Object.hasOwn(chainOrganisms, id)))].slice(0, 3) : [];
+  const historyLimit = 12;
+  // The previous version saved the indices of the three cards in this order.
+  const legacyOrder = ['frog', 'grass', 'locust'];
+  function readChain(list) {
+    return [...new Set(list.filter(id => typeof id === 'string' && Object.hasOwn(chainOrganisms, id)))];
+  }
+  const previous = Array.isArray(legacyItems) ? legacyItems.filter(Number.isInteger).map(index => legacyOrder[index]) : [];
+  let chain = readChain(Array.isArray(values.chain) ? values.chain : previous);
+  let history = Array.isArray(values.chainHistory) ? values.chainHistory.slice(-historyLimit).filter(Array.isArray).map(readChain) : [];
+  if (history.at(-1)?.join() !== chain.join()) {
+    history = Array.from({ length: chain.length + 1 }, (_, index) => chain.slice(0, index));
+  }
+  function canPlaceGrassFirst() {
+    return chain[0] === 'locust' && chain[1] === 'frog';
+  }
   buttons.forEach(button => paintChainOrganism(button.querySelector('canvas'), button.dataset.chainPick));
   function redraw() {
-    slots.forEach((slot, index) => { slot.textContent = chainOrganisms[chain[index]]?.name || `第 ${index + 1} 位`; });
+    const needsStart = canPlaceGrassFirst() && chain.length === 2;
+    const shown = needsStart ? [null, ...chain] : chain;
+    slots.forEach((slot, index) => {
+      const start = needsStart && index === 0;
+      slot.toggleAttribute('data-needs-start', start);
+      slot.textContent = start ? '待补起点' : chainOrganisms[shown[index]]?.name || `第 ${index + 1} 位`;
+    });
     arrows.forEach((arrow, index) => {
-      arrow.dataset.valid = chain.length <= index + 1 ? 'unset' :
-        String(correct.indexOf(chain[index + 1]) - correct.indexOf(chain[index]) === 1);
+      arrow.dataset.valid = !shown[index] || !shown[index + 1] ? 'unset' :
+        String(correct.indexOf(shown[index + 1]) - correct.indexOf(shown[index]) === 1);
       arrow.setAttribute('aria-label', arrow.dataset.valid === 'false' ? '需调整的箭头' : '能量流向');
     });
     for (const button of buttons) button.setAttribute('aria-pressed', String(chain.includes(button.dataset.chainPick)));
-    undo.disabled = chain.length === 0;
+    placement.hidden = !canPlaceGrassFirst();
+    placement.textContent = needsStart ? '补到前面' : '移到前面';
+    undo.disabled = history.length <= 1;
   }
   function explain() {
+    if (canPlaceGrassFirst()) {
+      const action = chain.length === 2 ? '补到' : '移到';
+      return `蝗虫 → 青蛙这一段连对了。蝗虫吃草，点「草」${action}最前面。`;
+    }
     const badPair = arrows.findIndex(arrow => arrow.dataset.valid === 'false');
     if (badPair !== -1) {
       const left = chain[badPair];
@@ -435,12 +476,13 @@ function mountChainLab(lab, values, save, complete) {
       if (left === 'locust' && right === 'grass') return '蝗虫吃草的叶片。交换这两者，能量就从草指向蝗虫。';
       return '这三张卡里没有记录青蛙和草直接取食。找找吃草、又被青蛙吃的生物。';
     }
-    if (chain.length === 1 && chain[0] !== 'grass') return '先找起点。哪种生物可以利用光制造有机物？';
+    if (chain.length === 1 && chain[0] !== 'grass') return '可以先连一段。把食物放在前面，吃它的生物放在后面。';
     if (chain.length === 3) return '连对了。草 → 蝗虫 → 青蛙，箭头沿着取食传递物质和能量。';
     return chain.length === 2 ? '这一步连对了，再找谁从下一份食物得到能量。' : '';
   }
   function update(control) {
-    values.chain = chain.slice();
+    values.chain = chain;
+    values.chainHistory = history.slice();
     redraw();
     feedback.textContent = explain();
     save();
@@ -450,17 +492,20 @@ function mountChainLab(lab, values, save, complete) {
   }
   buttons.forEach(button => button.addEventListener('click', () => {
     const picked = button.dataset.chainPick;
-    const index = chain.indexOf(picked);
-    if (index === -1) chain.push(picked);
-    else chain.splice(index, 1);
+    if (picked === 'grass' && canPlaceGrassFirst()) chain = correct.slice();
+    else if (chain.includes(picked)) chain = chain.filter(id => id !== picked);
+    else chain = [...chain, picked];
+    history.push(chain);
+    if (history.length > historyLimit) history.shift();
     update(button);
   }));
   undo.addEventListener('click', () => {
-    chain.pop();
+    history.pop();
+    chain = history.at(-1);
     update(undo);
   });
   lab.querySelector('[data-chain-hint]').addEventListener('click', event => {
-    feedback.textContent = '每次问一遍：谁被谁吃？把被吃的生物放在箭头尾端。';
+    feedback.textContent = canPlaceGrassFirst() ? explain() : '每次问一遍：谁被谁吃？把被吃的生物放在箭头尾端。';
     keepActivityFeedbackVisible(event.currentTarget, feedback);
   });
   redraw();
@@ -496,6 +541,8 @@ function mountTreeLab(lab, values, save, complete) {
   const pool = lab.querySelector('[data-tree-pool]');
   const preview = lab.querySelector('[data-tree-preview]');
   const feedback = lab.querySelector('[data-visual-feedback]');
+  const controls = lab.querySelector('.tree-controls');
+  const result = lab.querySelector('.tree-result');
   const traits = lab.querySelector('.tree-traits');
   const restart = lab.querySelector('[data-tree-restart]');
   let step = Number.isInteger(values.treeStep) && values.treeStep >= 0 && values.treeStep <= treeSteps.length ? values.treeStep : 0;
@@ -513,7 +560,7 @@ function mountTreeLab(lab, values, save, complete) {
       return `<button type="button" class="choice" data-tree-pick="${id}" aria-pressed="false"><strong>${leaf?.name || group.name}</strong><small>${leaf?.trait || group.note}</small></button>`;
     }).join('');
     drawSelection();
-    traits.hidden = step === treeSteps.length;
+    controls.hidden = step === treeSteps.length;
     preview.hidden = step === 0;
     preview.innerHTML = step ? `<ul class="tree-map" aria-label="我画出的分枝">${treeBranch(treeSteps[step - 1].id)}</ul>` : '';
     restart.hidden = step === 0 && selection.length === 0;
@@ -532,7 +579,7 @@ function mountTreeLab(lab, values, save, complete) {
     restart.hidden = step === 0 && selection.length === 0;
     feedback.textContent = selection.length === 2 ? '现在选一个这两张卡都具备的特征。' : '再点一张卡，与它对照。';
     storeTree();
-    keepActivityFeedbackVisible(button, feedback, lab);
+    keepLabVisible(lab, button, result);
   });
   traits.addEventListener('click', event => {
     const button = event.target.closest('[data-tree-trait]');
@@ -556,10 +603,10 @@ function mountTreeLab(lab, values, save, complete) {
       if (step === treeSteps.length) complete();
       const next = pool.querySelector('button') || restart;
       next.focus({ preventScroll: true });
-      keepActivityFeedbackVisible(next, step === treeSteps.length ? preview : feedback, lab);
+      keepLabVisible(lab, next, result);
       return;
     }
-    keepActivityFeedbackVisible(button, feedback, lab);
+    keepLabVisible(lab, button, result);
   });
   restart.addEventListener('click', () => {
     step = 0;
@@ -567,7 +614,9 @@ function mountTreeLab(lab, values, save, complete) {
     render();
     storeTree();
     feedback.textContent = '从四张卡重新开始。';
-    pool.querySelector('button').focus({ preventScroll: true });
+    const first = pool.querySelector('button');
+    first.focus({ preventScroll: true });
+    keepLabVisible(lab, first, result);
   });
   render();
   if (step === treeSteps.length) feedback.textContent = '这是你上次摆好的小树。';
@@ -613,7 +662,7 @@ function mountExtraLab(host, entry, record, persist) {
   }
   const complete = () => markPracticed(entry);
   if (lab.dataset.visualLab === 'animals') mountAnimalLab(lab, values, save, complete);
-  else if (lab.dataset.visualLab === 'chain') mountChainLab(lab, values, save, complete);
+  else if (lab.dataset.visualLab === 'chain') mountChainLab(lab, values, save, complete, record.items);
   else if (lab.dataset.visualLab === 'tree') mountTreeLab(lab, values, save, complete);
   else if (lab.dataset.visualLab === 'bottle') mountBottleLab(lab, values, save);
 }

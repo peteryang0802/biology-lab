@@ -297,7 +297,10 @@ function renderTermLesson(entry) {
     '8a-build-tree': '用共同特征摆一棵进化树',
   };
   const replaceActivity = Boolean(extra && ['8b-animal-groups', '8b-ecosystem'].includes(entry.id));
-  outlet.innerHTML = intro(entry, entry.question, entry.intro) + `<section class="term-activity" data-term-activity data-kind="${activity.kind}" aria-labelledby="activity-prompt">
+  const safety = entry.safety ? `<aside class="term-safety" aria-label="现实中遇到时"><strong>现实中遇到时</strong>
+    <p>${escape(entry.safety)}</p>
+    ${entry.source ? `<a href="${escape(entry.source.url)}" target="_blank" rel="noopener noreferrer">${escape(entry.source.label)} ↗</a>` : ''}</aside>` : '';
+  outlet.innerHTML = intro(entry, entry.question, entry.intro) + safety + `<section class="term-activity" data-term-activity data-kind="${activity.kind}" aria-labelledby="activity-prompt">
     <header class="term-activity-head"><h2 id="activity-prompt">${escape(extra && extraPrompts[entry.id] || activity.prompt)}</h2>
     ${renderTermAudio()}</header>
     ${activity.kind === 'project' ? '' : '<p class="activity-caption">教学示意</p>'}

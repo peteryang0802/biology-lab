@@ -216,3 +216,11 @@
 }
 
 .order-summary { font-size: .84rem; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; }
+.term-safety {
+  border-inline-start: 4px solid currentColor;
+  padding: .55rem .8rem;
+  margin-block: .7rem 1rem;
+  font-size: .96rem;
+}
+.term-safety p { margin-block: .2rem; }
+.term-safety a { font-size: .88em; }

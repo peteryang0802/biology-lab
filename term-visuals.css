@@ -3,6 +3,7 @@
   gap: 8px;
   min-width: 0;
   padding: clamp(8px, 2vw, 13px);
+  scroll-margin-block: 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--paper);
@@ -96,6 +97,7 @@
   border-radius: 6px;
 }
 .lab-organism small, .tree-pool small { color: var(--muted); font-size: .71rem; font-weight: 500; line-height: 1.35; }
+.lab-organism .chain-placement { color: var(--accent-deep); font-weight: 750; }
 .chain-preview {
   display: grid;
   align-items: center;
@@ -112,13 +114,19 @@
   background: var(--surface);
   overflow-wrap: anywhere;
 }
+.chain-slot[data-needs-start] {
+  border: 1px dashed var(--accent);
+  background: var(--sage);
+  color: var(--accent-deep);
+}
 .chain-arrow[data-valid="true"] { color: var(--accent-deep); }
 .chain-arrow[data-valid="false"] { color: #a53d20; text-decoration: line-through; }
 .chain-arrow[data-valid="unset"] { color: var(--muted); }
 .lab-actions { display: flex; gap: 4px 8px; flex-wrap: wrap; }
+.tree-controls, .tree-result { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.tree-result:not(:has([data-visual-feedback]:not(:empty), [data-tree-preview]:not([hidden]))) { display: none; }
 .tree-traits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .tree-traits button { padding-inline: 4px; min-width: 0; }
-.tree-traits[hidden], [data-tree-preview][hidden], .lab-hint[hidden] { display: none; }
 .tree-map, .tree-map ul { list-style: none; margin: 0; padding: 0; }
 .tree-map {
   padding: 8px 9px;
@@ -151,6 +159,32 @@
 @media (min-width: 530px) {
   .lab-specimens { width: min(100%, 500px); }
   .tree-pool { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 500px) and (max-height: 465px) and (orientation: landscape) {
+  [data-visual-lab="animals"] {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    grid-template-areas: "instructions instructions" "specimens feedback" "specimens hint";
+    align-items: start;
+  }
+  [data-visual-lab="animals"] .lab-instruction { grid-area: instructions; }
+  [data-visual-lab="animals"] .lab-specimens { grid-area: specimens; }
+  [data-visual-lab="animals"] .activity-feedback { grid-area: feedback; }
+  [data-visual-lab="animals"] .lab-hint { grid-area: hint; }
+
+  [data-visual-lab="tree"] {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-areas: "instructions instructions" "controls result" "restart result";
+    align-items: start;
+  }
+  [data-visual-lab="tree"]:has(.tree-controls[hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "instructions" "result" "restart";
+  }
+  [data-visual-lab="tree"] .lab-instruction { grid-area: instructions; }
+  .tree-controls { grid-area: controls; }
+  .tree-pool { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tree-result { grid-area: result; }
+  [data-tree-restart] { grid-area: restart; }
 }
 @media (prefers-color-scheme: dark) {
   .chain-arrow[data-valid="false"] { color: #ffb49c; }

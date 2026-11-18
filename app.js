@@ -35,6 +35,9 @@ const edition = document.querySelector('#edition');
 let routeVersion = 0;
 let renderedLesson = null;
 const directoryPositions = new Map();
+const lessonPositions = new Map();
+let historyEntry;
+let nextHistoryId = Date.now();
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
 function termForLesson(id) {
@@ -69,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=5`;
+    script.src = `./term-${id}.js?v=${id === '8a' ? 5 : 6}`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -621,21 +624,11 @@ function mountLearningAdditions(entry) {
     });
   }
   const listen = outlet.querySelector('[data-listen]');
-  if (listen) listen.addEventListener('click', async () => {
-    const feedback = outlet.querySelector('.audio-feedback');
-    playingPrompt?.pause();
-    listen.disabled = true;
-    const audio = playingPrompt = new Audio(`./assets/audio/${entry.id}.m4a`);
-    audio.addEventListener('ended', () => { listen.disabled = false; feedback.textContent = ''; });
-    audio.addEventListener('error', () => { listen.disabled = false; feedback.textContent = '朗读暂时无法播放，可以继续看文字。'; });
-    try {
-      await audio.play();
-      feedback.textContent = '正在播放观察提示。';
-    } catch {
-      listen.disabled = false;
-      feedback.textContent = '朗读暂时无法播放，可以继续看文字。';
-    }
-  });
+  if (listen && typeof mountPromptAudio === 'function') {
+    mountPromptAudio(listen, outlet.querySelector('.audio-feedback'), entry.id);
+  } else if (listen) {
+    listen.hidden = true;
+  }
 }
 
 function downloadProgress() {
@@ -729,12 +722,12 @@ function showRecovery({ term, entry, unknown = false } = {}) {
   const title = unknown ? '没找到这一课' : entry ? '这节课的材料暂时没载入' : '这册的目录暂时没载入';
   document.title = title + ' · 生物实验台';
   outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">${title}</h1>
-    <p>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。` : '可以重新载入，或从学期目录选一课。'}</p>
+    <p${unknown ? '' : ' role="status"'}>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。` : '可以重新载入，或从学期目录选一课。'}</p>
     ${unknown ? '' : '<button type="button" class="action" data-reload>重新载入</button>'}
     <a href="${entry && term ? termRoute(term.id) : '#/'}">${entry && term ? '回到本册目录' : '回到学期目录'}</a>
   </section>`;
   outlet.querySelector('[data-reload]')?.addEventListener('click', () => {
-    if (term?.id === '7a') location.reload();
+    if (entry || term?.id === '7a') location.reload();
     else render(true);
   });
 }
@@ -748,10 +741,27 @@ function showLocation(term, inLesson) {
   directory.open = false;
 }
 
-function finishNavigation(focus) {
+function lessonScrollForRoute(lessonId) {
+  let entry = history.state?.biologyRoute;
+  if (entry?.hash !== location.hash) {
+    entry = { hash: location.hash, id: ++nextHistoryId };
+    try {
+      history.replaceState({ ...history.state, biologyRoute: entry }, '');
+    } catch {
+      return 0;
+    }
+  }
+  if (historyEntry?.id !== entry.id) {
+    if (historyEntry?.lesson) lessonPositions.set(historyEntry.id, scrollY);
+    historyEntry = { ...entry, lesson: Boolean(lessonId) };
+  }
+  return lessonId ? lessonPositions.get(entry.id) || 0 : 0;
+}
+
+function finishNavigation(focus, position = 0) {
   if (!focus) return;
-  scrollTo(0, 0);
   outlet.querySelector('h1')?.focus({ preventScroll: true });
+  scrollTo(0, position);
 }
 
 function restoreDirectoryPosition(term, lesson) {
@@ -773,10 +783,10 @@ async function render(focus = false) {
   const previousLesson = renderedLesson;
   renderedLesson = null;
   progress.refresh();
-  playingPrompt?.pause();
-  playingPrompt = undefined;
   const hash = location.hash;
   const lessonId = /^#\/lesson\/([^/]+)$/.exec(hash)?.[1];
+  const lessonScroll = lessonScrollForRoute(lessonId);
+  playingPrompt?.stop();
   const termId = /^#\/term\/(7a|7b|8a|8b)$/.exec(hash)?.[1] || termForLesson(lessonId);
   const term = termsById.get(termId);
   showLocation(term, Boolean(lessonId));
@@ -831,7 +841,7 @@ async function render(focus = false) {
       showRecovery({ term, entry });
     }
   }
-  if (routeVersion === version) finishNavigation(focus);
+  if (routeVersion === version) finishNavigation(focus, renderedLesson ? lessonScroll : 0);
 }
 
 outlet.addEventListener('click', event => {

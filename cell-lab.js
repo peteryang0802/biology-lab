@@ -10,7 +10,7 @@ const CELL_SAMPLES = {
     task: '叶片照片里，哪处有成群的绿色小颗粒？',
     spots: [[23, 72], [74, 31]], answer: 1,
     descriptions: ['A 处是较浅的一片，少见绿色颗粒', 'B 处有成群的绿色颗粒'],
-    found: 'B 附近有一群绿色小颗粒。这里可以把它们和模型里的叶绿体对上。',
+    found: 'B 附近的绿色小颗粒是叶绿体。展开下方的示意图，在图里找一找。',
     hint: 'A 附近更浅。沿着格子的边看进去，到 B 附近找成群的绿色小颗粒。',
   },
   cheek: {
@@ -42,7 +42,7 @@ function renderCell(entry) {
   outlet.innerHTML = intro(entry, '放大会看到更多吗？') + `
     <section class="experiment cell-lab" aria-labelledby="zoom-title">
       <header class="section-heading"><h2 id="zoom-title">猜一猜，再看显微照片</h2></header>
-      <div class="station cell-station">
+      <div class="station cell-station cell-zoom-station">
         <div class="cell-microscope">
           ${cellPhoto('onion', { main: true })}
           ${cellPhoto('position', { mini: true })}
@@ -80,10 +80,13 @@ function renderCell(entry) {
       <details class="cell-extension">
         <summary>把实拍和细胞结构模型对一对</summary>
         <div class="cell-extension-content">
-          <p>照片给出观察线索，模型帮我们说清结构。照片里的边界可以分开相邻细胞。植物细胞的细胞膜通常贴在细胞壁内侧，这张洋葱照片难以把它们分辨开。</p>
+          <p>伊乐藻叶片照片里可以找到叶绿体。细胞膜、细胞核和液泡在这张照片里难以分辨，可以看下面的示意图。植物细胞有的含叶绿体，洋葱鳞片叶的内表皮细胞通常缺少叶绿体。</p>
           <div class="cell-models">
-            <figure><div class="cell-model" aria-hidden="true"><i></i></div><figcaption>植物细胞示意 · 外框代表细胞壁，内线代表细胞膜，圆形代表细胞核。</figcaption></figure>
-            <figure><div class="cell-model cell-model-animal" aria-hidden="true"><i></i></div><figcaption>动物细胞示意 · 外缘代表细胞膜，里面有细胞质。细胞核里含有遗传信息。</figcaption></figure>
+            <figure>
+              <canvas class="cell-plant-model" width="176" height="96" aria-hidden="true"></canvas>
+              <figcaption><strong>伊乐藻叶片细胞示意</strong><br>外框是细胞壁，紧贴内侧的细线是细胞膜。绿色小粒是叶绿体，浅蓝色区域是液泡，紫色圆形是细胞核。</figcaption>
+            </figure>
+            <figure><div class="cell-model-animal" aria-hidden="true"><i></i></div><figcaption>动物细胞示意 · 外缘代表细胞膜，里面有细胞质。细胞核里含有遗传信息。</figcaption></figure>
           </div>
         </div>
       </details>
@@ -144,8 +147,53 @@ function renderCell(entry) {
   const creditObservation = () => markPracticed(entry);
   mountCellZoom(record, save, creditObservation);
   mountCellSamples(record, save, creditObservation);
+  paintCellPlantModel(outlet.querySelector('.cell-plant-model'));
   mountCellOptics();
   mountLearningAdditions(entry);
+}
+
+function paintCellPlantModel(canvas) {
+  const ctx = setCanvasSize(canvas, 176, 96);
+  if (!ctx) return;
+
+  ctx.fillStyle = '#e7edc3';
+  ctx.fillRect(7, 7, 162, 82);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#476b52';
+  ctx.strokeRect(7, 7, 162, 82);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(12, 12, 152, 72);
+
+  ctx.beginPath();
+  ctx.ellipse(84, 48, 54, 23, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#c3e2ea';
+  ctx.fill();
+  ctx.strokeStyle = '#58818d';
+  ctx.stroke();
+
+  const chloroplasts = [[27, 20], [47, 19], [68, 19], [93, 19], [120, 19], [146, 21], [153, 37],
+    [20, 37], [21, 57], [33, 76], [57, 77], [85, 77], [112, 77]];
+  ctx.fillStyle = '#427c3e';
+  for (const [x, y] of chloroplasts) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, 4.5, 3, -.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(149, 68, 9, 0, Math.PI * 2);
+  ctx.fillStyle = '#b98caa';
+  ctx.fill();
+  ctx.strokeStyle = '#734d6b';
+  ctx.stroke();
+}
+
+function keepCellExerciseVisible(exercise) {
+  const height = window.visualViewport?.height ?? window.innerHeight;
+  const { top, bottom } = exercise.getBoundingClientRect();
+  if (bottom - top > height - 16) return;
+  const offset = bottom > height - 8 ? bottom - height + 8 : Math.min(0, top - 8);
+  if (offset) window.scrollBy({ top: offset, behavior: 'instant' });
 }
 
 function mountCellPhoto(figure, onStatus, focusAfterRetry = () => null) {
@@ -200,6 +248,7 @@ function mountCellPhoto(figure, onStatus, focusAfterRetry = () => null) {
 
 function mountCellZoom(record, save, creditObservation) {
   const scope = outlet.querySelector('.cell-microscope');
+  const exercise = scope.closest('.cell-zoom-station');
   const primaryFigure = scope.querySelector('[data-photo="onion"]');
   const positionFigure = scope.querySelector('[data-photo="position"]');
   const frame = primaryFigure.querySelector('.cell-image-box');
@@ -220,6 +269,8 @@ function mountCellZoom(record, save, creditObservation) {
   }
   setTarget(record.x, record.y);
   let detail, drag;
+  let detailRequested = false;
+  let detailAttempts = 0;
   let moved = false;
   const primary = mountCellPhoto(primaryFigure, show, () => reticle.hidden ? null : reticle);
   const position = mountCellPhoto(positionFigure, show);
@@ -239,6 +290,7 @@ function mountCellZoom(record, save, creditObservation) {
     positionFigure.hidden = !ready || !record.zoomed;
     positionFigure.querySelector('.cell-reticle').hidden = !position.ready;
     if (detail) detail.hidden = !ready || !record.zoomed;
+    if (!record.zoomed) detailRequested = false;
     if (ready && record.zoomed) loadDetail();
     redrawTarget();
 
@@ -255,8 +307,8 @@ function mountCellZoom(record, save, creditObservation) {
       info.textContent = primary.failed ? '照片暂不可见，等图回来再作观察。' : '正在加载显微照片。';
     } else if (!checked) {
       info.textContent = record.guess
-        ? '已记下你的猜想。可以挪动取景框，再放大看看。'
-        : '放大后，视野里能数到的细胞会怎样？也可以直接放大。';
+        ? '已记下你的猜想。拖动虚线框选位置，点按虚线框放大。'
+        : '放大后，视野里能数到的细胞会怎样？拖动虚线框选位置，点按虚线框放大。';
     } else {
       const original = record.firstGuess === 'skipped' ? '' : `原先选「${CELL_GUESSES[record.firstGuess]}」。`;
       const reaction = {
@@ -264,11 +316,13 @@ function mountCellZoom(record, save, creditObservation) {
         more: '再数一数。放大后只看局部。',
         unsure: '试着数一数局部和整片的细胞。',
       };
-      info.textContent = original + (reaction[record.revised] || '对照整片和局部，再数一数。');
+      info.textContent = original + (reaction[record.revised] || '数一数整片和局部的细胞，再选一次。');
     }
   }
   function loadDetail() {
-    if (detail) return;
+    if (detail || detailRequested) return;
+    detailRequested = true;
+    detailAttempts++;
     detail = new Image();
     detail.alt = '';
     detail.setAttribute('aria-hidden', 'true');
@@ -279,7 +333,9 @@ function mountCellZoom(record, save, creditObservation) {
       frame.prepend(detail);
       show();
     };
-    detail.src = './assets/onion-detail.webp';
+    detail.onerror = () => { detail = undefined; };
+    const retry = detailAttempts > 1 && location.protocol !== 'file:' ? `?retry=${detailAttempts}` : '';
+    detail.src = './assets/onion-detail.webp' + retry;
   }
   zoom.addEventListener('click', () => {
     if (!primary.ready) return;
@@ -289,6 +345,7 @@ function mountCellZoom(record, save, creditObservation) {
     save();
     show();
     if (returnFocus) zoom.focus({ preventScroll: true });
+    keepCellExerciseVisible(exercise);
   });
   restart.addEventListener('click', () => {
     record.firstGuess = record.guess = record.revised = null;
@@ -296,6 +353,7 @@ function mountCellZoom(record, save, creditObservation) {
     save();
     show();
     guesses[0].focus({ preventScroll: true });
+    keepCellExerciseVisible(exercise);
   });
   guesses.forEach(button => button.addEventListener('click', () => {
     if (record.firstGuess) record.revised = button.dataset.predict;
@@ -303,6 +361,7 @@ function mountCellZoom(record, save, creditObservation) {
     save();
     show();
     if (primary.ready && record.revised === 'less') creditObservation();
+    keepCellExerciseVisible(exercise);
   }));
   reticle.addEventListener('pointerdown', event => {
     if (!event.isPrimary || event.button !== 0) return;
@@ -398,6 +457,7 @@ function mountCellOptics() {
   const focus = module.querySelector('[data-cell-focus-feedback]');
   const view = module.querySelector('.cell-focus-model');
   const cover = module.querySelector('[data-cell-cover-model]');
+  const coverExercise = cover.closest('.cell-optic-grid');
   const coverFeedback = module.querySelector('[data-cell-cover-feedback]');
   const coverButtons = [...module.querySelectorAll('[data-cell-cover]')];
   function focusView() {
@@ -418,5 +478,6 @@ function mountCellOptics() {
     coverFeedback.textContent = method === 'edge'
       ? '一边先接触水，水会沿着盖玻片铺开，空气更容易从另一边出去。'
       : '平着落下容易把空气困在下面。在显微镜里，气泡会挡住一部分要观察的材料。';
+    keepCellExerciseVisible(coverExercise);
   }));
 }
