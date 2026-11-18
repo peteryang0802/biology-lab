@@ -134,8 +134,10 @@
     }
     [47, 317].forEach((x, i) => {
       box(ctx,x,25,196,128,'#f1f7eb','#7c968b');
-      box(ctx,x+67,111,62,40,'#b4d7dd',blue);
-      line(ctx,x+98,121,x+98,55,ink,5);
+      box(ctx,x+67,111,62,40,'#f9fbf6',blue);
+      box(ctx,x+69,124,58,25,'#b4d7dd',null);
+      box(ctx,x+69,120,58,4,'#f2cc89',null);
+      line(ctx,x+98,141,x+98,55,ink,5);
       if (i === 0) leaf(ctx,x+99,62,.32);
       if (i === 0 && selected === 0) {
         for (const [dx, dy] of [[19,17],[32,33],[173,16],[162,40],[174,63],[17,72]]) {

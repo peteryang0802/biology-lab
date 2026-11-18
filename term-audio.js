@@ -1,5 +1,17 @@
 'use strict';
 
+const promptAudioVersions = {
+  photosynthesis: 6,
+  'plant-transport': 7,
+  '7b-plant-breathing': 6,
+  '8b-eco-bottle': 6,
+  '8b-ecosystem': 6,
+  '8b-first-aid': 6,
+  '8b-classification': 7,
+  '8b-algae-and-plants': 7,
+  '8b-biosphere': 7,
+};
+
 function renderTermAudio() {
   return `<div class="term-audio">
     <button type="button" class="text-control" data-term-listen>听题</button>
@@ -13,7 +25,7 @@ function mountTermAudio(host, entry) {
 
 function mountPromptAudio(button, message, id) {
   const label = button.textContent;
-  const audioVersion = ['photosynthesis', '7b-plant-breathing', '8b-eco-bottle', '8b-ecosystem', '8b-first-aid'].includes(id) ? 6 : 5;
+  const audioVersion = promptAudioVersions[id] ?? 5;
   let audio;
   let timeout;
 

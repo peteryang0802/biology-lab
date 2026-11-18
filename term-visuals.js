@@ -25,7 +25,7 @@ function paintBreath(canvas, frame) {
   if (!ctx) return;
   const neutral = frame === -1;
   const inhale = frame === 0;
-  const diaphragm = neutral ? 82 : inhale ? 91 : 74;
+  const diaphragmControlY = neutral ? 62 : inhale ? 90 : 54;
   const lungScale = neutral ? .86 : inhale ? 1 : .76;
   ctx.clearRect(0, 0, 300, 104);
   ctx.lineJoin = 'round';
@@ -39,12 +39,12 @@ function paintBreath(canvas, frame) {
   ctx.lineWidth = 2;
   ctx.stroke();
   for (const side of [-1, 1]) {
-    fillOval(ctx, 150 + 26 * side, inhale ? 53 : 48, 24 * lungScale, 31 * lungScale, '#eebcba', '#995155');
+    fillOval(ctx, 150 + 26 * side, inhale ? 52 : 47, 24 * lungScale, 31 * lungScale, '#eebcba', '#995155');
     strokeDiagram(ctx, [[150, 35], [150 + side * 19, 47]], '#377d89', 3);
   }
   ctx.beginPath();
   ctx.moveTo(97, 88);
-  ctx.quadraticCurveTo(150, diaphragm - 20, 203, 88);
+  ctx.quadraticCurveTo(150, diaphragmControlY, 203, 88);
   ctx.strokeStyle = '#436853';
   ctx.lineWidth = 5;
   ctx.stroke();
@@ -636,7 +636,7 @@ function mountBottleLab(lab, values, save) {
       figure.querySelector('figcaption').textContent = mode ? `${name}瓶 · ${leaves} 片叶（模拟） · ${condition}` : `${name}瓶 · 4 片叶`;
     }
     feedback.textContent = mode === 'light' ? '这次只改变光照，模拟记录里乙多了两片叶。比较变得更清楚，也可以再找一对瓶重复观察。' :
-      mode === 'mixed' ? '乙也多了两片叶，可光照和水都变了。这份记录分不清是谁起作用。' : '';
+      mode === 'mixed' ? '乙比甲多了两片叶。光照和水量一起变了，这份记录分不清各自的影响。' : '';
   }
   buttons.forEach(button => button.addEventListener('click', () => {
     values.bottle = button.dataset.bottle;

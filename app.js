@@ -72,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=${id === '8a' ? 5 : 6}`;
+    script.src = `./term-${id}.js?v=7`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
