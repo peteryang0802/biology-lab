@@ -25,11 +25,17 @@ const courseEntries = new Map([['7a', legacy]]);
 const entriesById = new Map(legacy.map(entry => [entry.id, entry]));
 const pendingTerms = new Map();
 const storageKey = 'bio-learning-lab:v1';
-const state = readState();
+const backupSizeLimit = 2 * 1024 * 1024;
+const progress = typeof createProgressStore === 'function'
+  ? createProgressStore(storageKey, cleanState) : temporaryProgressStore();
+const state = progress.state;
 const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
 const locationNav = document.querySelector('#course-location');
 const edition = document.querySelector('#edition');
 let routeVersion = 0;
+let renderedLesson = null;
+const directoryPositions = new Map();
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
 function termForLesson(id) {
   if (typeof id !== 'string') return null;
@@ -63,7 +69,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=4`;
+    script.src = `./term-${id}.js?v=5`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -93,29 +99,65 @@ function cleanState(raw) {
   for (const entry of legacy) {
     if (plainRecord(raw[entry.id])) clean[entry.id] = raw[entry.id];
   }
-  for (const key of ['viewed', 'practiced', 'notes', 'reviews', 'projects', 'guesses', 'activities']) {
+  for (const key of ['viewed', 'practiced', 'checked', 'reviewed', 'titles', 'notes', 'reviews', 'projects', 'guesses', 'activities']) {
     if (!plainRecord(raw[key])) continue;
-    clean[key] = Object.fromEntries(Object.entries(raw[key]).filter(([id]) => termForLesson(id)));
+    clean[key] = Object.fromEntries(Object.entries(raw[key]).filter(([id, value]) =>
+      termForLesson(id) && (key !== 'titles' || typeof value === 'string' && value.trim() && value.length <= 100)));
   }
   return clean;
 }
 
-function readState() {
-  try { return cleanState(JSON.parse(localStorage.getItem(storageKey))); }
-  catch { return {}; }
+function temporaryProgressStore() {
+  const state = {};
+  return {
+    state,
+    current: () => state,
+    refresh() {},
+    save() { throw new Error('progress store unavailable'); },
+    importBackup(raw) {
+      Object.assign(state, cleanState(raw));
+      return { persisted: false, conflicts: 0 };
+    },
+  };
 }
 
 function saveState() {
-  const status = document.querySelector('#storage-status');
   try {
-    localStorage.setItem(storageKey, JSON.stringify(state));
-    status.hidden = true;
+    progress.save();
+    showStorageStatus(true);
     return true;
   } catch {
-    status.hidden = false;
-    status.textContent = '浏览器暂时无法保存。可以继续做，想留住记录时可从学习入口下载一份。';
+    showStorageStatus(false);
     return false;
   }
+}
+
+function showStorageStatus(saved) {
+  const status = document.querySelector('#storage-status');
+  status.hidden = saved;
+  if (!saved) status.textContent = '浏览器暂时无法保存。可以继续做，想留住记录时可从学习入口下载一份。';
+}
+
+function saveActivityField(id, field, value, index) {
+  const previous = plainRecord(state.activities?.[id]) ? state.activities[id] : {};
+  const record = { ...previous };
+  if (field === 'draft' && Number.isInteger(index) && index >= 0) {
+    const draft = Array.isArray(previous.draft) ? [...previous.draft] : [];
+    draft[index] = value;
+    record.draft = draft;
+  } else {
+    record[field] = value;
+  }
+  state.activities = { ...state.activities, [id]: record };
+  const saved = saveState();
+  updateDirectory(document.querySelector('.directory a[aria-current="page"]')?.dataset.entryId);
+  return saved;
+}
+
+function activityDraftHistory(id) {
+  const history = progress.current().activities?.[id]?.draftHistory;
+  return (Array.isArray(history) ? history : []).filter(item =>
+    Array.isArray(item?.draft) && Number.isFinite(item.time) && item.time > 0 && item.time <= 8640000000000000);
 }
 
 function escape(value = '') {
@@ -129,8 +171,13 @@ function updateDirectory(current) {
     const id = link.dataset.entryId;
     if (id === current) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
-    link.querySelector('.directory-status').textContent = state.practiced?.[id] ? '做过练习' :
-      state.viewed?.[id] || state[id] ? '看过' : link.hasAttribute('data-project') ? '项目实践' : '';
+    const draft = state.projects?.[id]?.draft ?? state.activities?.[id]?.draft;
+    const hasDraft = draft && Object.values(draft).some(value => Array.isArray(value) ? value.length > 0 :
+      typeof value === 'string' ? Boolean(value.trim()) : Boolean(value));
+    link.querySelector('.directory-status').textContent = hasDraft ? '有草稿' :
+      Object.hasOwn(state.reviewed ?? {}, id) ? '已试复习' :
+      state.practiced?.[id] ? '做过练习' : state.checked?.[id] ? '已核对记录' :
+      state.viewed?.[id] || state[id] ? '看过' : '';
   }
 }
 
@@ -149,7 +196,7 @@ function renderCatalogue(entries) {
     ${[...group(lessons, 'chapter')].map(([chapter, list]) => `<div class="directory-chapter">
       <h3>${escape(chapter)}</h3>
       ${list.map(entry => `<a href="${route(entry.id)}" data-entry-id="${entry.id}" ${entry.project ? 'data-project' : ''}>
-        <span>${escape(entry.title)}</span><small class="directory-status"></small><span class="chapter-page">第 ${entry.page} 页</span>
+        <span>${escape(entry.title)}${entry.project ? ' <small>项目实践</small>' : ''}</span><small class="directory-status"></small><span class="chapter-page">第 ${entry.page} 页</span>
       </a>`).join('')}
     </div>`).join('')}
   </section>`).join('');
@@ -162,6 +209,24 @@ function markPracticed(entry) {
     updateDirectory(entry.id);
   }
 }
+
+function markReviewAttempt(entry, correct) {
+  const reviewed = state.reviewed ?? {};
+  const outcome = reviewed[entry.id] === true || correct === true;
+  if (reviewed[entry.id] === outcome) return;
+  state.reviewed = { ...reviewed, [entry.id]: outcome };
+  saveState();
+  updateDirectory(entry.id);
+}
+
+const diagramBestChoices = {
+  'life-traits': [0, 1],
+  levels: [0],
+  photosynthesis: [0],
+  'human-nutrients': [null, 0],
+  'plant-transport': [1],
+  'aed-map': [null, 1],
+};
 
 function intro(entry, question, description = '') {
   const anchor = entry.anchor || globalThis.bioRevisions?.[entry.id]?.anchor;
@@ -318,14 +383,19 @@ function mountDiagram(entry, stage, index) {
       : record.guess === null ? '' : '记下了。打开记录核对。');
     const first = stage.choices[record.first]?.label || (record.first === 'unsure' ? '还不确定' : '');
     const revised = record.revealed && first && record.first !== record.guess && choice;
-    feedback.textContent = revised ? `起先选了「${first}」。${message}` : message;
+    const best = diagramBestChoices[entry.id]?.[index] ?? stage.revealChoice;
+    const leading = !choice || !Number.isInteger(best) ? '' : record.guess === best
+      ? '你选的线索能回答这次的问题。' : '你选的线索还不够。';
+    const explanation = leading ? message.replace(/^(这条记录还不够。|观察和你的猜想一致。)/, '') : message;
+    const checkedMessage = `${revised ? `起先选了「${first}」。` : ''}${leading}${explanation}`;
+    feedback.textContent = checkedMessage;
     function available(position, ok) {
       if (displayRevision !== revision) return;
       if (ok) unavailable.delete(position);
       else unavailable.add(position);
       feedback.textContent = unavailable.size
         ? '有照片暂不可见。请重试，图下的文字是材料记录，不能当作你已经亲眼观察到的结果。'
-        : revised ? `起先选了「${first}」。${message}` : message;
+        : checkedMessage;
     }
     board.replaceChildren(...items.map(([kind, label], position) => {
       const item = document.createElement('li');
@@ -370,7 +440,9 @@ function mountDiagram(entry, stage, index) {
   unsure.addEventListener('click', () => choose('unsure'));
   reveal.addEventListener('click', () => {
     record.revealed = true;
+    state.checked = { ...state.checked, [entry.id]: true };
     save();
+    updateDirectory(entry.id);
     redraw();
     rethink.focus({ preventScroll: true });
     alignEvidence(host, rethink);
@@ -539,7 +611,13 @@ function mountLearningAdditions(entry) {
       const qualifier = photoUnavailable ? '照片暂不可见，这次先根据题目里的文字记录判断。'
         : photoStation && !openPlantSample ? '想用照片再核对，可在上方切回伊乐藻。' : '';
       feedback.textContent = (correct ? photoUnavailable ? '选择和文字记录吻合。' : '这次判断和材料吻合。' : '这次的证据还不够。') + qualifier + activity.explain;
-      if (name === 'evidence' || correct) markPracticed(entry);
+      if (name === 'transfer') markReviewAttempt(entry, correct);
+      else {
+        state.checked = { ...state.checked, [entry.id]: true };
+        if (correct) markPracticed(entry);
+        saveState();
+        updateDirectory(entry.id);
+      }
     });
   }
   const listen = outlet.querySelector('[data-listen]');
@@ -561,50 +639,25 @@ function mountLearningAdditions(entry) {
 }
 
 function downloadProgress() {
-  const blob = new Blob([JSON.stringify({ version: 1, progress: state }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ version: 1, progress: progress.current() }, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = Object.assign(document.createElement('a'), { href: url, download: '生物实验台学习记录.json' });
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function mergeProjects(local, incoming) {
-  const merged = { ...local };
-  const limit = typeof PROJECT_HISTORY_LIMIT === 'number' ? PROJECT_HISTORY_LIMIT : 6;
-  for (const [id, record] of Object.entries(incoming)) {
-    if (!plainRecord(record)) continue;
-    const current = plainRecord(merged[id]) ? merged[id] : {};
-    const values = draft => plainRecord(draft) ? Object.values(draft) : [];
-    const hasDraft = draft => values(draft).some(value => Array.isArray(value) ? value.length > 0 : Boolean(value));
-    const versions = item => Array.isArray(item.versions) ? item.versions : [];
-    const usable = entry => Number.isFinite(entry?.time) && entry.time > 0 && entry.time <= 8640000000000000 && plainRecord(entry.draft);
-    const draft = hasDraft(current.draft) ? current.draft : record.draft;
-    const pool = [...versions(current).filter(usable), ...versions(record).filter(usable)];
-    if (draft === current.draft && hasDraft(record.draft)) pool.push({time: Date.now(), draft: record.draft});
-    const duplicates = new Set();
-    const saved = pool.filter(item => {
-      const signature = JSON.stringify(item.draft);
-      if (duplicates.has(signature)) return false;
-      duplicates.add(signature);
-      return true;
-    }).slice(0, limit);
-    saved.sort((a,b) => b.time - a.time);
-    merged[id] = {draft, versions:saved};
-  }
-  return merged;
-}
-
 function renderHome() {
   document.title = '生物实验台 · 北京版初中生物';
   const lastTerm = termsById.get(termForLesson(state.last));
   const last = entriesById.get(state.last);
+  const savedTitle = last?.title || state.titles?.[state.last];
   outlet.innerHTML = `<section class="course-hub">
     <header class="hub-intro">
       <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
       <p class="intro-copy">课前先猜一猜，课后换份材料再试。按学期找到正在学的内容。</p>
     </header>
     ${lastTerm ? `<nav class="lesson-next hub-resume" aria-label="继续学习"><a class="next-lesson" href="${route(state.last)}">
-      <span><small>继续上次 · ${lastTerm.title}</small><strong>${escape(last?.title || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
+      <span><small>继续上次 · ${lastTerm.title}</small><strong data-resume-title>${escape(savedTitle || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
     </a></nav>` : ''}
     <div class="term-grid" aria-label="四册课本">
       ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card term-${term.color}">
@@ -619,6 +672,18 @@ function renderHome() {
     <input type="file" id="progress-import" accept=".json,application/json">
     <p role="status" data-import-result></p>
   </details>`;
+  // Backups from before titles were saved can recover the name without loading other books.
+  if (lastTerm && !savedTitle) {
+    const id = state.last;
+    const titleLabel = outlet.querySelector('[data-resume-title]');
+    loadTerm(lastTerm.id).then(() => {
+      const title = entriesById.get(id)?.title;
+      if (!title || !titleLabel?.isConnected || state.last !== id) return;
+      titleLabel.textContent = title;
+      state.titles = { ...state.titles, [id]: title };
+      saveState();
+    }).catch(() => {});
+  }
   outlet.querySelector('[data-export]').addEventListener('click', downloadProgress);
   outlet.querySelector('#progress-import').addEventListener('change', async event => {
     const picker = event.currentTarget;
@@ -626,21 +691,18 @@ function renderHome() {
     const file = picker.files[0];
     if (!file) return;
     try {
-      if (file.size > 250000) throw new Error('size');
+      if (file.size > backupSizeLimit) throw new Error('size');
       const saved = JSON.parse(await file.text());
       if (saved.version !== 1 || !plainRecord(saved.progress)) throw new Error('format');
-      const imported = cleanState(saved.progress);
-      for (const [key, value] of Object.entries(imported)) {
-        if (key === 'last' && (!picker.isConnected || state.last)) continue;
-        if (key === 'projects') state.projects = mergeProjects(state.projects, value);
-        else state[key] = plainRecord(value) ? { ...value, ...state[key] } : value;
-      }
-      const persisted = saveState();
+      const { persisted, conflicts } = progress.importBackup(saved.progress);
+      showStorageStatus(persisted);
       if (!picker.isConnected) return;
       renderHome();
       updateDirectory();
       outlet.querySelector('.progress-tools').open = true;
-      outlet.querySelector('[data-import-result]').textContent = persisted ? '记录已导入。' : '记录已在本页打开，浏览器暂时无法保存。';
+      const message = persisted ? '记录已导入。' : '记录已在本页打开，浏览器暂时无法保存。';
+      outlet.querySelector('[data-import-result]').textContent = message +
+        (conflicts ? `有 ${conflicts} 项草稿同时有两份内容。可以在课内的草稿历史查看另一份。` : '');
     } catch {
       feedback.textContent = '这份文件读不了。请选择从生物实验台下载的 JSON 记录。';
     }
@@ -692,8 +754,25 @@ function finishNavigation(focus) {
   outlet.querySelector('h1')?.focus({ preventScroll: true });
 }
 
+function restoreDirectoryPosition(term, lesson) {
+  const link = outlet.querySelector(`.term-contents [data-entry-id="${lesson.id}"]`);
+  if (!link) return false;
+  const remembered = directoryPositions.get(term.id);
+  link.focus({ preventScroll: true });
+  if (remembered?.id === lesson.id) {
+    const targetY = Math.min(remembered.top, Math.max(12, innerHeight - 76));
+    scrollBy({ top: link.getBoundingClientRect().top - targetY, behavior: 'instant' });
+  } else {
+    link.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }
+  return true;
+}
+
 async function render(focus = false) {
   const version = ++routeVersion;
+  const previousLesson = renderedLesson;
+  renderedLesson = null;
+  progress.refresh();
   playingPrompt?.pause();
   playingPrompt = undefined;
   const hash = location.hash;
@@ -716,6 +795,7 @@ async function render(focus = false) {
       if (routeVersion !== version) return;
       if (!lessonId) {
         renderTerm(term, entries);
+        if (focus && previousLesson?.term === term.id && restoreDirectoryPosition(term, previousLesson)) return;
       } else {
         entry = entriesById.get(lessonId);
         if (!entry) {
@@ -725,8 +805,10 @@ async function render(focus = false) {
             directory.hidden = false;
             directory.querySelector('#contents').innerHTML = renderCatalogue(entries);
           }
+          renderedLesson = entry;
           state.last = entry.id;
           state.lastByTerm = { ...state.lastByTerm, [term.id]: entry.id };
+          state.titles = { ...state.titles, [entry.id]: entry.title };
           state.viewed = { ...state.viewed, [entry.id]: true };
           saveState();
           updateDirectory(entry.id);
@@ -751,6 +833,14 @@ async function render(focus = false) {
   }
   if (routeVersion === version) finishNavigation(focus);
 }
+
+outlet.addEventListener('click', event => {
+  const link = event.target.closest('.term-contents [data-entry-id]');
+  if (!link) return;
+  const id = link.dataset.entryId;
+  const term = termForLesson(id);
+  if (term) directoryPositions.set(term, { id, top: Math.max(8, link.getBoundingClientRect().top) });
+});
 
 directory.addEventListener('click', event => {
   if (event.target.closest('a')) directory.open = false;

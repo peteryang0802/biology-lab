@@ -172,10 +172,47 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
     align-items: start;
   }
-  .term-activity[data-kind="switch"] h2,
+  .term-activity[data-kind="switch"] .term-activity-head,
   .term-activity[data-kind="switch"] .activity-caption { grid-column: 1 / -1; }
-  .term-activity[data-kind="switch"] .activity-switch { grid-column: 1; grid-row: 3; }
+  .term-activity[data-kind="switch"] > [data-frame-controls] { grid-column: 1; grid-row: 3; }
   .term-activity[data-kind="switch"] [data-current-frame] { grid-column: 2; grid-row: 3 / span 2; }
   .term-activity[data-kind="switch"] > [data-feedback] { grid-column: 1; grid-row: 4; }
   .term-scene { width: min(100%, 240px); }
 }
+
+.term-activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 10px;
+}
+.term-activity-head h2 { flex: 1 1 11rem; }
+.term-audio { flex: 0 1 auto; }
+.term-audio button { padding: 2px 4px; }
+.term-audio [data-term-audio-status]:not(:empty) { display: block; margin: 0 0 4px; }
+.breath-prediction { display: grid; gap: 8px; }
+.breath-prediction p, .review-instruction { color: var(--muted); font-size: .90rem; }
+.term-activity [data-guess-again] { justify-self: start; }
+.term-review [data-review-content] { padding-bottom: 9px; }
+.review-instruction { margin-bottom: 9px; }
+.review-history > summary, .draft-history > summary { min-height: 44px; align-content: center; color: var(--accent-deep); font-size: .86rem; }
+.review-history > p, .draft-history dl { font-size: .86rem; margin-block: 6px; overflow-wrap: anywhere; }
+.draft-history details { border-block-start: 1px solid var(--border); }
+.draft-history summary { padding-block: 8px; }
+.draft-history dl { margin-inline: 0; }
+.draft-history dt { color: var(--muted); }
+.draft-history dd { margin: 0 0 .55em; white-space: pre-wrap; }
+
+@media (max-height: 465px) and (orientation: landscape) {
+  .term-activity[data-kind="switch"] [data-breath-prediction] { grid-column: 1 / -1; }
+  .term-activity[data-kind="switch"] [data-guess-again] { grid-column: 1; grid-row: 5; }
+  .breath-prediction { grid-template-columns: 1fr minmax(165px, .55fr); }
+  .breath-prediction [data-breath-neutral] { grid-column: 2; grid-row: 1 / span 2; }
+}
+@media (prefers-color-scheme: dark) and (hover: hover) {
+  button:not(:disabled):hover { background: #305449; color: var(--ink); }
+  .action:not(:disabled):not([aria-pressed="true"]):hover { background: #285848; color: #fffdf7; }
+  button[aria-pressed="true"]:hover { background: #365f4e; color: var(--ink); }
+}
+
+.order-summary { font-size: .84rem; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; }

@@ -12,7 +12,8 @@
   <link rel="stylesheet" href="./cell-lab.css?v=3">
   <link rel="stylesheet" href="./project-labs.css?v=3">
   <link rel="stylesheet" href="./learning.css?v=3">
-  <link rel="stylesheet" href="./terms.css?v=4">
+  <link rel="stylesheet" href="./terms.css?v=5">
+  <link rel="stylesheet" href="./term-visuals.css?v=5">
   <script defer src="./unit-one.js?v=3"></script>
   <script defer src="./unit-two.js?v=3"></script>
   <script defer src="./diagrams.js?v=4"></script>
@@ -20,9 +21,12 @@
   <script defer src="./revisions.js?v=3"></script>
   <script defer src="./project-labs.js?v=3"></script>
   <script defer src="./cell-lab.js?v=3"></script>
-  <script defer src="./term-visuals.js?v=4"></script>
-  <script defer src="./term-labs.js?v=4"></script>
-  <script defer src="./app.js?v=4"></script>
+  <script defer src="./term-visuals.js?v=5"></script>
+  <script defer src="./term-audio.js?v=5"></script>
+  <script defer src="./term-review.js?v=5"></script>
+  <script defer src="./term-labs.js?v=5"></script>
+  <script defer src="./progress.js?v=5"></script>
+  <script defer src="./app.js?v=5"></script>
 </head>
 <body>
   <a class="skip" href="#lesson">跳到学习内容</a>
@@ -70,10 +74,17 @@
       </div>
     </details>
     <article id="lesson" aria-labelledby="lesson-title" tabindex="-1">
-      <section class="load-panel">
-        <h1 id="lesson-title">生物实验台</h1>
-        <p>正在准备学期目录。若画面停在这里，可以重新打开。</p>
-        <a href="./">重新打开学习入口</a>
+      <section class="course-hub">
+        <header class="hub-intro">
+          <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
+          <p class="intro-copy">按学期找到正在学的内容。</p>
+        </header>
+        <div class="term-grid" aria-label="四册课本">
+          <a href="#/term/7a" class="term-card term-leaf"><span class="term-card-copy"><strong>七年级上册</strong><span>认识生命 · 营养和运输</span></span><span aria-hidden="true">→</span></a>
+          <a href="#/term/7b" class="term-card term-river"><span class="term-card-copy"><strong>七年级下册</strong><span>呼吸、排泄与生命活动调节</span></span><span aria-hidden="true">→</span></a>
+          <a href="#/term/8a" class="term-card term-clay"><span class="term-card-copy"><strong>八年级上册</strong><span>生殖发育 · 遗传变异 · 进化</span></span><span aria-hidden="true">→</span></a>
+          <a href="#/term/8b" class="term-card term-moss"><span class="term-card-copy"><strong>八年级下册</strong><span>生物与环境 · 生物学与社会</span></span><span aria-hidden="true">→</span></a>
+        </div>
       </section>
       <noscript><p>浏览器已关闭 JavaScript。开启后可查看四册目录并使用课内互动。</p></noscript>
     </article>

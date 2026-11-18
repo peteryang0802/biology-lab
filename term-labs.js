@@ -26,7 +26,7 @@ function optionalEvidence(rows = []) {
 function activityMarkup(activity) {
   switch (activity.kind) {
     case 'switch':
-      return `<div class="activity-switch" role="group" aria-label="切换观察条件">
+      return `<div class="activity-switch" role="group" aria-label="切换观察条件" data-frame-controls>
         ${activity.states.map((frame, index) => `<button type="button" class="choice" data-frame="${index}" aria-pressed="false">${escape(frame.label)}</button>`).join('')}
       </div><div data-current-frame></div>`;
     case 'order':
@@ -35,7 +35,7 @@ function activityMarkup(activity) {
       const options = activityRows(order ? activity.tiles : activity.rows);
       return `<div class="activity-choice-board" role="group" aria-label="${order ? '按顺序点材料' : '选出支持判断的线索'}">
         ${options.map((row, index) => `<button type="button" class="choice activity-choice" data-item="${index}" aria-pressed="false">${row}</button>`).join('')}
-      </div><div class="activity-actions">
+      </div>${order ? '<p class="order-summary" data-order-summary hidden></p>' : ''}<div class="activity-actions">
         <button type="button" class="action" data-activity-check>核对${order ? '顺序' : '线索'}</button>
         <button type="button" class="text-control" data-activity-hint>还不确定</button>
         ${order ? '<button type="button" class="text-control" data-activity-clear>重新排</button>' : ''}
@@ -49,6 +49,7 @@ function activityMarkup(activity) {
           </label>`).join('')}
         </div>
         <details class="project-check"><summary>交给别人前，用这几条自查</summary><ul>${(activity.criteria || []).map(check => `<li>${escape(check)}</li>`).join('')}</ul></details>
+        <details class="draft-history" data-draft-history hidden><summary>查看草稿的其他版本</summary><div></div></details>
         <button type="button" class="text-control" data-export-work>下载我的作品</button>`;
     default: throw new Error('activity kind');
   }
@@ -68,67 +69,178 @@ function keepActivityFeedbackVisible(control, feedback, context = control) {
   });
 }
 
-function mountTermActivity(entry) {
+function renderBreathingPrediction(entry) {
+  if (entry.id !== '7b-human-breathing') return '';
+  return `<div class="breath-prediction" data-breath-prediction>
+    <p>先猜一猜。膈往下移时，空气往哪儿走？</p>
+    <canvas class="term-scene" width="300" height="104" role="img" aria-label="胸腔、肺和膈肌示意，尚未显示气流方向。" data-breath-neutral></canvas>
+    <div class="activity-switch" role="group" aria-label="先猜空气流向">
+      <button type="button" class="choice" data-predict="in">进入肺</button>
+      <button type="button" class="choice" data-predict="out">离开肺</button>
+      <button type="button" class="choice" data-predict="unsure">还不确定，先观察</button>
+    </div>
+  </div>
+  <button type="button" class="text-control" data-guess-again hidden>从猜想重新开始</button>`;
+}
+
+function mountSwitch(entry, host, record, feedback) {
+  const activity = entry.activity;
+  const frame = host.querySelector('[data-current-frame]');
+  const controlRow = host.querySelector('[data-frame-controls]');
+  const controls = [...controlRow.querySelectorAll('[data-frame]')];
+  const guessPanel = host.querySelector('[data-breath-prediction]');
+  const again = host.querySelector('[data-guess-again]');
+  const predictions = {in: '空气进入肺', out: '空气离开肺', unsure: '还不确定'};
+  let prediction = Object.hasOwn(predictions, record.prediction) ? record.prediction : null;
+
+  function show(index, chosen) {
+    const scenario = activity.states[index];
+    for (const button of controls) button.setAttribute('aria-pressed', String(Number(button.dataset.frame) === index));
+    frame.innerHTML = renderTermVisual(entry, index) + optionalEvidence(scenario.rows);
+    const breath = frame.querySelector('[data-breath]');
+    if (breath) paintBreath(breath, index);
+    paintActivityArt(frame);
+    const guess = index === 0 && guessPanel && prediction ? `开始时你选了「${predictions[prediction]}」。` : '';
+    feedback.textContent = chosen ? guess + scenario.result : '';
+  }
+
+  function activate(index, chosen) {
+    if (guessPanel) {
+      guessPanel.hidden = true;
+      again.hidden = false;
+    }
+    controlRow.hidden = false;
+    frame.hidden = false;
+    show(index, chosen);
+  }
+
+  function resetPrediction() {
+    guessPanel.hidden = false;
+    paintBreath(guessPanel.querySelector('[data-breath-neutral]'), -1);
+    controlRow.hidden = true;
+    frame.hidden = true;
+    again.hidden = true;
+    feedback.textContent = '';
+  }
+
+  controls.forEach(button => button.addEventListener('click', () => {
+    const index = Number(button.dataset.frame);
+    show(index, true);
+    saveActivityField(entry.id, 'frame', index);
+    keepActivityFeedbackVisible(button, feedback, controlRow);
+  }));
+  if (guessPanel) {
+    for (const button of guessPanel.querySelectorAll('[data-predict]')) {
+      button.addEventListener('click', () => {
+        prediction = button.dataset.predict;
+        saveActivityField(entry.id, 'prediction', prediction);
+        saveActivityField(entry.id, 'frame', 0);
+        activate(0, true);
+        controls[0].focus({preventScroll:true});
+        keepActivityFeedbackVisible(controls[0], feedback, controlRow);
+      });
+    }
+    again.addEventListener('click', () => {
+      prediction = null;
+      saveActivityField(entry.id, 'prediction', null);
+      resetPrediction();
+      guessPanel.querySelector('button').focus();
+    });
+  }
+  const previous = Number.isInteger(record.frame) && Boolean(activity.states[record.frame]);
+  if (guessPanel && !prediction) resetPrediction();
+  else activate(previous ? record.frame : activity.initialFrame ?? 0, previous);
+}
+
+function mountDraft(entry, host, record, feedback) {
+  const activity = entry.activity;
+  mountEyeBench(host, record.eye, eye => saveActivityField(entry.id, 'eye', eye));
+  const inputs = [...host.querySelectorAll('[data-draft]')];
+  const draft = Array.isArray(record.draft) ? record.draft.map(value => typeof value === 'string' ? value.slice(0, 400) : '') : [];
+  const history = host.querySelector('[data-draft-history]');
+
+  function showHistory() {
+    const alternatives = activityDraftHistory(entry.id);
+    history.hidden = alternatives.length === 0;
+    history.querySelector('div').innerHTML = alternatives.map((version, index) => `<details>
+      <summary>${new Date(version.time).toLocaleString('zh-CN')}</summary>
+      <dl>${activity.fields.map((field, i) => version.draft[i] ? `<dt>${escape(field.label)}</dt><dd>${escape(version.draft[i])}</dd>` : '').join('')}</dl>
+      <button type="button" class="text-control" data-restore="${index}">恢复这个版本</button>
+    </details>`).join('');
+    for (const button of history.querySelectorAll('[data-restore]')) {
+      button.addEventListener('click', () => {
+        const version = alternatives[Number(button.dataset.restore)];
+        const currentDraft = inputs.map(input => input.value);
+        let stored = !currentDraft.some(value => value.trim()) ||
+          saveActivityField(entry.id, 'draftHistory', [{time: Date.now(), draft: currentDraft}]);
+        inputs.forEach((input, index) => {
+          const next = String(version.draft[index] || '').slice(0, 400);
+          if (next === input.value) return;
+          input.value = next;
+          draft[index] = next;
+          stored = saveActivityField(entry.id, 'draft', next, index) && stored;
+        });
+        feedback.textContent = stored ? '已恢复这一版草稿。' : '这一版已在本页恢复，可以下载保存。';
+        showHistory();
+        history.querySelector('summary')?.focus({preventScroll: true});
+      });
+    }
+  }
+
+  inputs.forEach((input, index) => {
+    input.value = draft[index] || '';
+    input.addEventListener('input', () => {
+      draft[index] = input.value;
+      const saved = saveActivityField(entry.id, 'draft', input.value, index);
+      feedback.textContent = saved ? '草稿已保存在这台设备。' : '当前浏览器无法保存，可下载你的作品。';
+      showHistory();
+    });
+  });
+  host.querySelector('[data-export-work]').addEventListener('click', () => {
+    const visual = typeof describeExtraLab === 'function' ? describeExtraLab(entry, record) : [];
+    if (!draft.some(text => text?.trim()) && !visual.length) {
+      feedback.textContent = '先写一点想法，就能带走自己的作品。';
+      inputs[0].focus();
+      return;
+    }
+    const lines = activity.fields.map((field, index) => `${field.label}\n${draft[index] || '（待补充）'}`);
+    const url = URL.createObjectURL(new Blob([[entry.title, ...visual, ...lines].join('\n\n')], {type: 'text/plain;charset=utf-8'}));
+    Object.assign(document.createElement('a'), {href: url, download: `${entry.title}.txt`}).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    feedback.textContent = '已请求下载你的作品。';
+    keepActivityFeedbackVisible(host.querySelector('[data-export-work]'), feedback);
+  });
+  showHistory();
+  paintActivityArt(host);
+}
+
+function mountTermActivity(entry, replaceActivity) {
   const activity = entry.activity;
   const host = outlet.querySelector('[data-term-activity]');
   const feedback = host.querySelector('[data-feedback]');
   const saved = state.activities?.[entry.id];
-  const record = plainRecord(saved) ? { ...saved } : {};
-  const persist = () => {
-    state.activities = { ...state.activities, [entry.id]: record };
-    return saveState();
-  };
-
-  if (activity.kind === 'switch') {
-    const frame = host.querySelector('[data-current-frame]');
-    const controls = [...host.querySelectorAll('[data-frame]')];
-    function show(index, chosen) {
-      const scenario = activity.states[index];
-      for (const button of controls) button.setAttribute('aria-pressed', String(Number(button.dataset.frame) === index));
-      frame.innerHTML = renderTermVisual(entry, index) + optionalEvidence(scenario.rows);
-      const breath = frame.querySelector('[data-breath]');
-      if (breath) paintBreath(breath, index);
-      paintActivityArt(frame);
-      feedback.textContent = chosen ? scenario.result : '';
-    }
-    controls.forEach(button => button.addEventListener('click', () => {
-      record.frame = Number(button.dataset.frame);
-      show(record.frame, true);
-      keepActivityFeedbackVisible(button, feedback, button.parentElement);
-      persist();
-    }));
-    const previous = Number.isInteger(record.frame) && Boolean(activity.states[record.frame]);
-    show(previous ? record.frame : 0, previous);
-  } else if (activity.kind === 'project') {
-    mountEyeBench(host);
-    const draft = Array.isArray(record.draft) ? record.draft.map(value => typeof value === 'string' ? value.slice(0, 400) : '') : [];
-    host.querySelectorAll('[data-draft]').forEach((input, index) => {
-      input.value = draft[index] || '';
-      input.addEventListener('input', () => {
-        draft[index] = input.value;
-        record.draft = draft;
-        feedback.textContent = persist() ? '草稿已保存在这台设备。' : '当前浏览器无法保存，可下载你的作品。';
-      });
-    });
-    host.querySelector('[data-export-work]').addEventListener('click', () => {
-      if (!draft.some(text => text?.trim())) {
-        feedback.textContent = '先写一点想法，就能带走自己的作品。';
-        host.querySelector('textarea')?.focus();
-        return;
-      }
-      const lines = activity.fields.map((field, index) => `${field.label}\n${draft[index] || '（待补充）'}`);
-      const url = URL.createObjectURL(new Blob([[entry.title, ...lines].join('\n\n')], {type: 'text/plain;charset=utf-8'}));
-      Object.assign(document.createElement('a'), {href: url, download: `${entry.title}.txt`}).click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      feedback.textContent = '已请求下载你的作品。';
-    });
+  const record = plainRecord(saved) ? {...saved} : {};
+  if (typeof mountExtraLab === 'function') {
+    mountExtraLab(host, entry, record, () => saveActivityField(entry.id, 'visualLab', record.visualLab));
+  }
+  mountTermAudio(host, entry);
+  if (replaceActivity) {
     paintActivityArt(host);
+  } else if (activity.kind === 'switch') {
+    mountSwitch(entry, host, record, feedback);
+  } else if (activity.kind === 'project') {
+    mountDraft(entry, host, record, feedback);
   } else {
     const order = activity.kind === 'order';
     const items = [...host.querySelectorAll('[data-item]')];
+    const orderSummary = host.querySelector('[data-order-summary]');
     let selection = Array.isArray(record.items)
       ? [...new Set(record.items.filter(index => Number.isInteger(index) && items[index]))] : [];
     function display() {
+      if (orderSummary) {
+        orderSummary.hidden = selection.length === 0;
+        orderSummary.textContent = '我排的顺序　' + selection.map(index => activity.tiles[index].label).join(' → ');
+      }
       items.forEach((button, index) => {
         const position = selection.indexOf(index);
         const mark = button.querySelector('[data-mark]');
@@ -144,10 +256,9 @@ function mountTermActivity(entry) {
     }
     function editSelection(newSelection) {
       selection = newSelection;
-      record.items = selection;
       display();
       feedback.textContent = '';
-      persist();
+      saveActivityField(entry.id, 'items', selection);
     }
     items.forEach((button, index) => button.addEventListener('click', () => {
       const next = selection.includes(index) ? selection.filter(value => value !== index) : [...selection, index];
@@ -161,7 +272,11 @@ function mountTermActivity(entry) {
     host.querySelector('[data-activity-check]').addEventListener('click', event => {
       const right = activity.answer.length === selection.length && activity.answer.every((value, index) =>
         order ? value === selection[index] : selection.includes(value));
-      feedback.textContent = right ? activity.result : activity.hint;
+      const position = order && selection.length === activity.answer.length
+        ? activity.answer.findIndex((value, index) => value !== selection[index]) : -1;
+      feedback.textContent = right ? activity.result : position >= 0
+        ? `再看看第 ${position + 1} 步。你放了「${activity.tiles[selection[position]].label}」。${activity.hint}`
+        : activity.hint;
       keepActivityFeedbackVisible(event.currentTarget, feedback);
       if (right) markPracticed(entry);
     });
@@ -169,49 +284,31 @@ function mountTermActivity(entry) {
     paintActivityArt(host);
   }
 
-  const review = outlet.querySelector('[data-term-review]');
-  const reviewFeedback = review.querySelector('[role="status"]');
-  const options = [...review.querySelectorAll('[data-review-option]')];
-  function answer(index, write) {
-    if (!options[index]) return;
-    options.forEach((button, i) => button.setAttribute('aria-pressed', String(i === index)));
-    reviewFeedback.textContent = entry.review.options[index][1];
-    if (!write) return;
-    record.review = index;
-    persist();
-    if (index === entry.review.answer) markPracticed(entry);
-  }
-  options.forEach((button, index) => button.addEventListener('click', () => {
-    answer(index, true);
-    keepActivityFeedbackVisible(button, reviewFeedback);
-  }));
-  review.querySelector('[data-review-hint]').addEventListener('click', event => {
-    reviewFeedback.textContent = '可以先找题目里能比较的条件或记录，再试着选。';
-    keepActivityFeedbackVisible(event.currentTarget, reviewFeedback);
-  });
-  if (Number.isInteger(record.review)) answer(record.review, false);
+  mountTermReview(entry, record);
 }
 
 function renderTermLesson(entry) {
   const activity = entry.activity;
   if (!activity || !entry.review) throw new Error('activity missing');
+  const extra = typeof renderExtraLab === 'function' ? renderExtraLab(entry) : '';
+  const extraPrompts = {
+    '8b-animal-groups': '在鲫鱼和小虾身上找结构',
+    '8b-ecosystem': '把草地里的能量流向连起来',
+    '8a-build-tree': '用共同特征摆一棵进化树',
+  };
+  const replaceActivity = Boolean(extra && ['8b-animal-groups', '8b-ecosystem'].includes(entry.id));
   outlet.innerHTML = intro(entry, entry.question, entry.intro) + `<section class="term-activity" data-term-activity data-kind="${activity.kind}" aria-labelledby="activity-prompt">
-    <h2 id="activity-prompt">${escape(activity.prompt)}</h2>
+    <header class="term-activity-head"><h2 id="activity-prompt">${escape(extra && extraPrompts[entry.id] || activity.prompt)}</h2>
+    ${renderTermAudio()}</header>
     ${activity.kind === 'project' ? '' : '<p class="activity-caption">教学示意</p>'}
+    ${renderBreathingPrediction(entry)}
     ${renderEyeBench(entry)}
-    ${activityMarkup(activity)}
+    ${extra}
+    ${replaceActivity ? '' : activityMarkup(activity)}
     <p class="activity-feedback" role="status" data-feedback></p>
   </section>
   <details class="more-activity term-takeaway"><summary>用一句话连回课本</summary>
     <p>${escape(entry.takeaway)}</p>
-  </details>
-  <details class="more-activity term-review" data-term-review><summary>换个例子复习</summary>
-    <h2>${escape(entry.review.prompt)}</h2>
-    <div class="choice-row">
-      ${entry.review.options.map(([label], index) => `<button type="button" class="choice" data-review-option="${index}" aria-pressed="false">${escape(label)}</button>`).join('')}
-    </div>
-    <button type="button" class="text-control" data-review-hint>还不确定</button>
-    <p class="activity-feedback" role="status"></p>
-  </details>` + following(entry);
-  mountTermActivity(entry);
+  </details>` + renderTermReview() + following(entry);
+  mountTermActivity(entry, replaceActivity);
 }

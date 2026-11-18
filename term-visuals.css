@@ -1,0 +1,157 @@
+.extra-lab {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: clamp(8px, 2vw, 13px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.lab-instruction { color: var(--muted); font-size: .88rem; }
+.lab-hint { justify-self: start; }
+.lab-specimens {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.lab-specimens figure {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.lab-specimens figcaption { padding: 4px 5px; text-align: center; font-size: .78rem; font-weight: 700; }
+.lab-specimen { position: relative; isolation: isolate; background: #eef3e9; }
+.lab-specimen canvas { display: block; width: 100%; height: auto; }
+[data-bottle-record] canvas { display: block; margin-inline: auto; width: min(100%, 140px); height: auto; background: #eef3e9; }
+.lab-specimen::before {
+  content: "";
+  position: absolute;
+  left: var(--guide-x);
+  top: 18%;
+  height: var(--guide-length);
+  border-inline-start: 1.5px solid #365745;
+  pointer-events: none;
+  z-index: 1;
+}
+.lab-specimen [data-spot="0"] { --hotspot-x: var(--guide-x); --hotspot-y: 18%; }
+.lab-hotspot {
+  position: absolute;
+  z-index: 2;
+  left: var(--hotspot-x);
+  top: var(--hotspot-y);
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #142d27;
+  line-height: 1;
+}
+.lab-hotspot span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #365745;
+  border-radius: 50%;
+  background: #fffff2;
+  font-size: .77rem;
+}
+.lab-hotspot[aria-pressed="true"] { background: #f1deae55; box-shadow: inset 0 0 0 2px #81511e; }
+.lab-hotspot[aria-pressed="true"] span { color: #fffdf7; background: #6d4419; border-color: #6d4419; }
+.lab-specimen[data-animal-image="fish"] { --guide-x: 64%; --guide-length: 24%; }
+.lab-specimen[data-animal-image="fish"] [data-spot="1"] { --hotspot-x: 24%; --hotspot-y: 73%; }
+.lab-specimen[data-animal-image="shrimp"] { --guide-x: 69%; --guide-length: 27%; }
+.lab-specimen[data-animal-image="shrimp"] [data-spot="1"] { --hotspot-x: 19%; --hotspot-y: 23%; }
+
+.chain-pool,
+.tree-pool,
+.tree-traits,
+.bottle-choices {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.chain-pool { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lab-organism, .tree-pool button {
+  display: grid;
+  align-content: start;
+  align-items: center;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 4px;
+  overflow-wrap: anywhere;
+}
+.lab-organism canvas {
+  width: min(100%, 70px);
+  height: auto;
+  background: #eef3e9;
+  border-radius: 6px;
+}
+.lab-organism small, .tree-pool small { color: var(--muted); font-size: .71rem; font-weight: 500; line-height: 1.35; }
+.chain-preview {
+  display: grid;
+  align-items: center;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  font-size: .84rem;
+  font-weight: 650;
+}
+.chain-slot {
+  padding: 4px 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.chain-arrow[data-valid="true"] { color: var(--accent-deep); }
+.chain-arrow[data-valid="false"] { color: #a53d20; text-decoration: line-through; }
+.chain-arrow[data-valid="unset"] { color: var(--muted); }
+.lab-actions { display: flex; gap: 4px 8px; flex-wrap: wrap; }
+.tree-traits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tree-traits button { padding-inline: 4px; min-width: 0; }
+.tree-traits[hidden], [data-tree-preview][hidden], .lab-hint[hidden] { display: none; }
+.tree-map, .tree-map ul { list-style: none; margin: 0; padding: 0; }
+.tree-map {
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: .82rem;
+}
+.tree-map .tree-branch > span { font-weight: 650; color: var(--accent-deep); }
+.tree-map ul { margin-inline-start: 4px; padding-inline-start: 14px; border-inline-start: 1px solid var(--accent-deep); }
+.tree-map ul > li { position: relative; padding-block-start: 2px; }
+.tree-map ul > li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -14px;
+  top: .85em;
+  width: 10px;
+  border-block-start: 1px solid var(--accent-deep);
+}
+.genetics-grid .genetics-phenotype { display: block; font-size: .71rem; font-weight: 600; }
+
+@media (hover: hover) {
+  .extra-lab .lab-hotspot:not(:disabled):hover { background: #f1deae77; color: #142d27; }
+  .extra-lab button:not(.lab-hotspot):not(:disabled):hover {
+    background: var(--sage);
+    color: var(--ink);
+  }
+}
+@media (min-width: 530px) {
+  .lab-specimens { width: min(100%, 500px); }
+  .tree-pool { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (prefers-color-scheme: dark) {
+  .chain-arrow[data-valid="false"] { color: #ffb49c; }
+}
