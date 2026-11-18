@@ -7,6 +7,7 @@ const promptAudioVersions = {
   '8b-eco-bottle': 6,
   '8b-ecosystem': 6,
   '8b-first-aid': 6,
+  '8b-communicable-disease': 8,
   '8b-classification': 7,
   '8b-algae-and-plants': 7,
   '8b-biosphere': 7,

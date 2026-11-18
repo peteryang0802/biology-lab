@@ -28,6 +28,7 @@ details > summary { cursor: pointer; }
 .book-note summary::after { content: ' +'; }
 .book-note[open] summary::after { content: ' −'; }
 .book-note p { max-width: 32rem; margin: 0 0 4px; }
+.book-note p + p { margin-top: 6px; }
 .diagram-panel { background: var(--diagram-paper); }
 .diagram-items li[data-focus="true"] { border-block-end-color: var(--selected-line); color: var(--ink); }
 .diagram-items span { font-size: .89rem; overflow-wrap: anywhere; }
@@ -120,6 +121,7 @@ details > summary { cursor: pointer; }
   .intro .lesson-name { font-size: .78rem; margin-bottom: 2px; }
   .intro h1 { font-size: clamp(1.35rem, 3.5vw, 1.95rem); }
   .intro .book-note { grid-column: 2; grid-row: 1 / span 2; align-self: end; margin: 0; }
+  .intro .book-note[open] { grid-column: 1 / -1; grid-row: auto; }
   .section-heading { margin-bottom: 5px; }
   .section-heading h2 { font-size: 1.11rem; }
   .station .controls { align-content: start; }

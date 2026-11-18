@@ -72,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=7`;
+    script.src = `./term-${id}.js?v=8`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -233,12 +233,15 @@ const diagramBestChoices = {
 
 function intro(entry, question, description = '') {
   const anchor = entry.anchor || globalThis.bioRevisions?.[entry.id]?.anchor;
+  const bookNotes = Array.isArray(anchor) ? anchor : [anchor || entry.title];
   return `<header class="intro">
     <p class="eyebrow">${escape(entry.unit)} · ${escape(entry.chapter)}</p>
     <p class="lesson-name">${entry.project ? '项目实践 · ' : ''}${escape(entry.title)}</p>
     <h1 id="lesson-title" tabindex="-1">${escape(question)}</h1>
     ${description ? `<p class="intro-copy">${escape(description)}</p>` : ''}
-    <details class="book-note"><summary>课本第 ${entry.page} 页起</summary><p>${escape(anchor || entry.title)}</p></details>
+    <details class="book-note"><summary>课本第 ${entry.page} 页起 · 回书要点</summary>
+      ${bookNotes.map(note => `<p>${escape(note)}</p>`).join('')}
+    </details>
   </header>`;
 }
 
