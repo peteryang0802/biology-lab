@@ -130,6 +130,20 @@
       case 'tree': rect(88,70,16,44,sand,brown); oval(94,53,39,35,leaf); oval(117,47,23,23,leaf); path([[45,115],[150,115]],ink); break;
       case 'building': rect(38,55,117,59,paper); path([[32,55],[97,24],[161,55]],brown,sand); rect(81,78,30,36,sky); for(const x of [53,122]) rect(x,66,17,19,sky); break;
       case 'door': rect(55,25,82,92,sand,brown); rect(71,34,50,83,paper); oval(110,79,3,3,brown); break;
+      case 'peach':
+        oval(90, 76, 39, 32, '#efb282', brown, -.18);
+        path([[90,48],[101,33],[115,27]],brown,null,5);
+        drawLeaf(125,32,.42);
+        path([[91,57],[98,72],[100,92]],'#a7634a',null,3);
+        break;
+      case 'pollen-on-stigma':
+        oval(79, 75, 28, 19, pink, red, -.55);
+        oval(113, 75, 28, 19, pink, red, .55);
+        path([[96,109],[96,52]],green,null,8);
+        oval(96,52,12,4,leaf);
+        for (const [x, y] of [[64,33],[77,39],[107,29],[119,43],[95,46]]) oval(x,y,4,4,'#a56927',null);
+        arrow(73,29,89,46,'#8c562c');
+        break;
       case 'path': path([[30,95],[61,49],[120,73],[157,31]],'#b08b61',null,15); oval(30,95,7,7,ink); arrow(115,73,155,32,ink); break;
       case 'ball': oval(95,75,32,32,sky,blue); path([[71,56],[105,67],[111,101]],blue); arrow(22,115,68,115,brown); break;
       case 'person': oval(94,33,15,15,sand,brown); path([[94,51],[94,92],[75,117]],ink); path([[94,92],[115,117]],ink); path([[64,73],[94,56],[125,71]],ink); break;

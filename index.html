@@ -3,32 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="跟着北京版七年级上册，用显微照片、实验记录和小项目学会用证据解释生物现象。">
+  <meta name="description" content="北京版初中生物四册。课前带着问题观察，课后用新材料验证想法。">
   <meta name="robots" content="noindex">
-  <title>生物实验台 · 北京版七年级上册</title>
+  <title>生物实验台 · 北京版初中生物</title>
   <link rel="icon" type="image/png" href="./favicon.png" sizes="32x32">
   <link rel="stylesheet" href="./styles.css?v=3">
   <link rel="stylesheet" href="./course.css?v=3">
   <link rel="stylesheet" href="./cell-lab.css?v=3">
   <link rel="stylesheet" href="./project-labs.css?v=3">
   <link rel="stylesheet" href="./learning.css?v=3">
+  <link rel="stylesheet" href="./terms.css?v=4">
   <script defer src="./unit-one.js?v=3"></script>
   <script defer src="./unit-two.js?v=3"></script>
-  <script defer src="./diagrams.js?v=3"></script>
+  <script defer src="./diagrams.js?v=4"></script>
   <script defer src="./scenes.js?v=3"></script>
   <script defer src="./revisions.js?v=3"></script>
   <script defer src="./project-labs.js?v=3"></script>
   <script defer src="./cell-lab.js?v=3"></script>
-  <script defer src="./app.js?v=3"></script>
+  <script defer src="./term-visuals.js?v=4"></script>
+  <script defer src="./term-labs.js?v=4"></script>
+  <script defer src="./app.js?v=4"></script>
 </head>
 <body>
   <a class="skip" href="#lesson">跳到学习内容</a>
   <header class="site-header"><div class="wrap">
     <a class="brand" href="#/" aria-label="生物实验台，返回学习入口"><span class="brand-icon" aria-hidden="true">◉</span><span class="brand-text">生物实验台</span></a>
-    <div class="edition">北京版 · 七年级上册</div>
+    <div class="edition" id="edition">北京版 · 初中生物</div>
   </div></header>
   <main id="main" class="wrap">
-    <details class="directory" id="directory">
+    <nav class="course-location" id="course-location" aria-label="所在学期" hidden></nav>
+    <details class="directory" id="directory" hidden>
       <summary>课本目录</summary>
       <div id="contents">
         <section class="unit">
@@ -68,13 +72,13 @@
     <article id="lesson" aria-labelledby="lesson-title" tabindex="-1">
       <section class="load-panel">
         <h1 id="lesson-title">生物实验台</h1>
-        <p>正在准备观察材料。如果一直没有出现，请重新载入页面，或先展开上方的课本目录。</p>
+        <p>正在准备学期目录。若画面停在这里，可以重新打开。</p>
         <a href="./">重新打开学习入口</a>
       </section>
-      <noscript><p>浏览器已关闭 JavaScript。你仍可以看教材目录，开启 JavaScript 后可使用课堂互动。</p></noscript>
+      <noscript><p>浏览器已关闭 JavaScript。开启后可查看四册目录并使用课内互动。</p></noscript>
     </article>
     <p id="storage-status" class="storage-status" role="status" hidden></p>
   </main>
-  <footer class="site-footer"><div class="wrap">北京出版社 · 七年级上册配套观察与实验</div></footer>
+  <footer class="site-footer"><div class="wrap">北京版初中生物 · 四册配套观察与实验</div></footer>
 </body>
 </html>

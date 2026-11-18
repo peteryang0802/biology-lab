@@ -4,19 +4,74 @@ const outlet = document.querySelector('#lesson');
 const directory = document.querySelector('#directory');
 const directorySummary = directory.querySelector('summary');
 const route = id => '#/lesson/' + id;
-const sequence = [...directory.querySelectorAll('a[data-page]')].map(link => ({
+const termRoute = id => '#/term/' + id;
+const terms = [
+  { id: '7a', title: '七年级上册', theme: '认识生命 · 营养和运输', color: 'leaf', count: 14 },
+  { id: '7b', title: '七年级下册', theme: '呼吸、排泄与生命活动调节', color: 'river', count: 14 },
+  { id: '8a', title: '八年级上册', theme: '生殖发育 · 遗传变异 · 进化', color: 'clay', count: 14 },
+  { id: '8b', title: '八年级下册', theme: '生物与环境 · 生物学与社会', color: 'moss', count: 16 },
+];
+const termsById = new Map(terms.map(term => [term.id, term]));
+const legacy = [...directory.querySelectorAll('a[data-page]')].map(link => ({
   id: link.hash.slice(9),
   title: link.querySelector('span').textContent,
   chapter: link.closest('.directory-chapter').querySelector('h3').textContent,
   unit: link.closest('.unit').querySelector('h2').textContent,
   page: Number(link.dataset.page),
   project: link.hasAttribute('data-project'),
-  link,
+  term: '7a',
 }));
-const byId = new Map(sequence.map(entry => [entry.id, entry]));
+const courseEntries = new Map([['7a', legacy]]);
+const entriesById = new Map(legacy.map(entry => [entry.id, entry]));
+const pendingTerms = new Map();
 const storageKey = 'bio-learning-lab:v1';
 const state = readState();
 const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
+const locationNav = document.querySelector('#course-location');
+const edition = document.querySelector('#edition');
+let routeVersion = 0;
+
+function termForLesson(id) {
+  if (typeof id !== 'string') return null;
+  if (entriesById.has(id)) return entriesById.get(id).term;
+  return /^(7b|8a|8b)-[a-z0-9]+(?:-[a-z0-9]+)*$/.exec(id)?.[1] || null;
+}
+
+function loadTerm(id) {
+  if (courseEntries.has(id)) return Promise.resolve(courseEntries.get(id));
+  if (pendingTerms.has(id)) return pendingTerms.get(id);
+  const pending = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    const timer = setTimeout(() => finish(new Error('term timeout')), 8500);
+    function finish(error) {
+      clearTimeout(timer);
+      script.remove();
+      if (error) {
+        reject(error);
+        return;
+      }
+      try {
+        const data = globalThis.bioTerms?.[id];
+        if (!Array.isArray(data)) throw new Error('term missing');
+        const entries = data.flatMap(unit => unit.chapters.flatMap(chapter => chapter.lessons.map(lesson => ({
+          ...lesson, term: id, unit: unit.title, chapter: chapter.title,
+        }))));
+        if (entries.length !== termsById.get(id).count || new Set(entries.map(entry => entry.id)).size !== entries.length ||
+            !entries.every(entry => termForLesson(entry.id) === id)) throw new Error('term directory');
+        courseEntries.set(id, entries);
+        for (const entry of entries) entriesById.set(entry.id, entry);
+        resolve(entries);
+      } catch (problem) { reject(problem); }
+    }
+    script.src = `./term-${id}.js?v=4`;
+    script.onload = () => finish();
+    script.onerror = () => finish(new Error('term download'));
+    document.head.append(script);
+  }).finally(() => pendingTerms.delete(id));
+  pendingTerms.set(id, pending);
+  return pending;
+}
+
 let playingPrompt;
 
 function plainRecord(value) {
@@ -26,16 +81,21 @@ function plainRecord(value) {
 function cleanState(raw) {
   if (!plainRecord(raw)) return {};
   const clean = {};
-  if (byId.has(raw.last)) clean.last = raw.last;
-  for (const {id} of sequence) {
-    if (plainRecord(raw[id])) clean[id] = raw[id];
-  }
-  for (const key of ['viewed', 'practiced', 'notes', 'reviews', 'projects', 'guesses']) {
-    if (!plainRecord(raw[key])) continue;
-    clean[key] = {};
-    for (const {id} of sequence) {
-      if (Object.hasOwn(raw[key], id)) clean[key][id] = raw[key][id];
+  const recentTerm = termForLesson(raw.last);
+  if (recentTerm) clean.last = raw.last;
+  clean.lastByTerm = {};
+  if (recentTerm) clean.lastByTerm[recentTerm] = raw.last;
+  if (plainRecord(raw.lastByTerm)) {
+    for (const [term, id] of Object.entries(raw.lastByTerm)) {
+      if (termForLesson(id) === term) clean.lastByTerm[term] = id;
     }
+  }
+  for (const entry of legacy) {
+    if (plainRecord(raw[entry.id])) clean[entry.id] = raw[entry.id];
+  }
+  for (const key of ['viewed', 'practiced', 'notes', 'reviews', 'projects', 'guesses', 'activities']) {
+    if (!plainRecord(raw[key])) continue;
+    clean[key] = Object.fromEntries(Object.entries(raw[key]).filter(([id]) => termForLesson(id)));
   }
   return clean;
 }
@@ -65,17 +125,34 @@ function escape(value = '') {
 }
 
 function updateDirectory(current) {
-  for (const entry of sequence) {
-    if (entry.id === current) entry.link.setAttribute('aria-current', 'page');
-    else entry.link.removeAttribute('aria-current');
-    let badge = entry.link.querySelector('.directory-status');
-    if (!badge) {
-      badge = document.createElement('small');
-      badge.className = 'directory-status';
-      entry.link.append(badge);
-    }
-    badge.textContent = state.practiced?.[entry.id] ? '做过练习' : state.viewed?.[entry.id] || state[entry.id] ? '看过' : entry.project ? '项目实践' : '';
+  for (const link of document.querySelectorAll('a[data-entry-id]')) {
+    const id = link.dataset.entryId;
+    if (id === current) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+    link.querySelector('.directory-status').textContent = state.practiced?.[id] ? '做过练习' :
+      state.viewed?.[id] || state[id] ? '看过' : link.hasAttribute('data-project') ? '项目实践' : '';
   }
+}
+
+function renderCatalogue(entries) {
+  function group(items, key) {
+    const groups = new Map();
+    for (const item of items) {
+      if (!groups.has(item[key])) groups.set(item[key], []);
+      groups.get(item[key]).push(item);
+    }
+    return groups;
+  }
+  const units = group(entries, 'unit');
+  return [...units].map(([unit, lessons]) => `<section class="unit">
+    <h2>${escape(unit)}</h2>
+    ${[...group(lessons, 'chapter')].map(([chapter, list]) => `<div class="directory-chapter">
+      <h3>${escape(chapter)}</h3>
+      ${list.map(entry => `<a href="${route(entry.id)}" data-entry-id="${entry.id}" ${entry.project ? 'data-project' : ''}>
+        <span>${escape(entry.title)}</span><small class="directory-status"></small><span class="chapter-page">第 ${entry.page} 页</span>
+      </a>`).join('')}
+    </div>`).join('')}
+  </section>`).join('');
 }
 
 function markPracticed(entry) {
@@ -87,7 +164,7 @@ function markPracticed(entry) {
 }
 
 function intro(entry, question, description = '') {
-  const anchor = globalThis.bioRevisions?.[entry.id]?.anchor;
+  const anchor = entry.anchor || globalThis.bioRevisions?.[entry.id]?.anchor;
   return `<header class="intro">
     <p class="eyebrow">${escape(entry.unit)} · ${escape(entry.chapter)}</p>
     <p class="lesson-name">${entry.project ? '项目实践 · ' : ''}${escape(entry.title)}</p>
@@ -98,12 +175,13 @@ function intro(entry, question, description = '') {
 }
 
 function following(entry) {
+  const sequence = courseEntries.get(entry.term);
   const index = sequence.indexOf(entry);
   const next = sequence[index + 1];
   const previous = sequence[index - 1];
   return `<nav class="lesson-next" aria-label="按课本顺序移动">
     ${next ? `<a class="next-lesson" href="${route(next.id)}"><span><small>按课本顺序继续</small><strong>${escape(next.title)}</strong></span><span aria-hidden="true">→</span></a>`
-      : '<a class="next-lesson" href="#/"><span><strong>回到学习入口</strong><small>从目录回看任一课</small></span></a>'}
+      : `<a class="next-lesson" href="${termRoute(entry.term)}"><span><strong>回到本册目录</strong><small>按课本顺序回看</small></span></a>`}
     ${previous ? `<a class="previous-lesson" href="${route(previous.id)}">← 上一项 · ${escape(previous.title)}</a>` : ''}
   </nav>`;
 }
@@ -517,19 +595,22 @@ function mergeProjects(local, incoming) {
 }
 
 function renderHome() {
-  const last = byId.get(state.last);
-  const next = last || sequence[0];
-  const count = sequence.filter(entry => state.practiced?.[entry.id] === true).length;
-  document.title = '生物实验台 · 北京版七年级上册';
-  outlet.innerHTML = `<section class="home-entry">
-    <p class="eyebrow">北京版 · 七年级上册</p>
-    <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
-    <p class="intro-copy">看一张图或一组记录，自己挑出能说明问题的线索。</p>
-    <nav class="lesson-next"><a class="next-lesson" href="${route(next.id)}">
-      <span><small>${last ? '继续上次读到的课' : '从课本第一课开始'}</small><strong>${escape(next.title)}</strong></span><span aria-hidden="true">→</span>
-    </a></nav>
-    ${count ? `<p class="progress-count">做过 ${count} 项练习，可以从课本目录回看。</p>` : ''}
-    ${!last ? `<a class="sample-link" href="${route('cell')}">先试一下显微镜</a>` : ''}
+  document.title = '生物实验台 · 北京版初中生物';
+  const lastTerm = termsById.get(termForLesson(state.last));
+  const last = entriesById.get(state.last);
+  outlet.innerHTML = `<section class="course-hub">
+    <header class="hub-intro">
+      <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
+      <p class="intro-copy">课前先猜一猜，课后换份材料再试。按学期找到正在学的内容。</p>
+    </header>
+    ${lastTerm ? `<nav class="lesson-next hub-resume" aria-label="继续学习"><a class="next-lesson" href="${route(state.last)}">
+      <span><small>继续上次 · ${lastTerm.title}</small><strong>${escape(last?.title || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
+    </a></nav>` : ''}
+    <div class="term-grid" aria-label="四册课本">
+      ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card term-${term.color}">
+        <span class="term-card-copy"><strong>${term.title}</strong><span>${term.theme}</span></span><span aria-hidden="true">→</span>
+      </a>`).join('')}
+    </div>
   </section>
   <details class="more-activity progress-tools"><summary>学习记录备份</summary>
     <p>记录保存在当前浏览器。下载后，可以在另一台设备打开同一网站导入。</p>
@@ -550,7 +631,7 @@ function renderHome() {
       if (saved.version !== 1 || !plainRecord(saved.progress)) throw new Error('format');
       const imported = cleanState(saved.progress);
       for (const [key, value] of Object.entries(imported)) {
-        if (key === 'last' && !picker.isConnected) continue;
+        if (key === 'last' && (!picker.isConnected || state.last)) continue;
         if (key === 'projects') state.projects = mergeProjects(state.projects, value);
         else state[key] = plainRecord(value) ? { ...value, ...state[key] } : value;
       }
@@ -566,58 +647,109 @@ function renderHome() {
   });
 }
 
-function showRecovery(entry, unknown = false) {
-  const title = unknown ? '没找到这一课' : '这节课的材料暂时没载入';
+function renderTerm(term, entries) {
+  document.title = term.title + ' · 生物实验台';
+  const last = entriesById.get(state.lastByTerm?.[term.id]);
+  outlet.innerHTML = `<section class="term-page">
+    <header class="intro">
+      <h1 id="lesson-title" tabindex="-1">${term.title}</h1>
+      <p class="intro-copy">${term.theme}</p>
+    </header>
+    <nav class="lesson-next term-start" aria-label="从本册开始"><a class="next-lesson" href="${route((last || entries[0]).id)}">
+      <span><small>${last ? '继续读本册' : '从本册第一课开始'}</small><strong>${escape((last || entries[0]).title)}</strong></span><span aria-hidden="true">→</span>
+    </a></nav>
+    <section class="term-contents" aria-label="课本目录">${renderCatalogue(entries)}</section>
+  </section>`;
+  updateDirectory();
+}
+
+function showRecovery({ term, entry, unknown = false } = {}) {
+  const title = unknown ? '没找到这一课' : entry ? '这节课的材料暂时没载入' : '这册的目录暂时没载入';
   document.title = title + ' · 生物实验台';
   outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">${title}</h1>
-    <p>${entry ? `还可以先翻纸书。课本第 ${entry.page} 页 · ${escape(entry.title)}。` : '可以从课本目录重新选一课。'}</p>
+    <p>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。` : '可以重新载入，或从学期目录选一课。'}</p>
     ${unknown ? '' : '<button type="button" class="action" data-reload>重新载入</button>'}
-    <button type="button" data-open-directory>打开课本目录</button>
+    <a href="${entry && term ? termRoute(term.id) : '#/'}">${entry && term ? '回到本册目录' : '回到学期目录'}</a>
   </section>`;
-  outlet.querySelector('[data-reload]')?.addEventListener('click', () => location.reload());
-  outlet.querySelector('[data-open-directory]').addEventListener('click', () => {
-    directory.open = true;
-    directorySummary.focus();
+  outlet.querySelector('[data-reload]')?.addEventListener('click', () => {
+    if (term?.id === '7a') location.reload();
+    else render(true);
   });
 }
 
-function render(focus = false) {
+function showLocation(term, inLesson) {
+  edition.textContent = term ? '北京版 · ' + term.title : '北京版 · 初中生物';
+  locationNav.hidden = !term;
+  const bookLink = inLesson && term?.id !== '7a';
+  locationNav.innerHTML = term ? `<a href="${bookLink ? termRoute(term.id) : '#/'}">← ${bookLink ? term.title + '目录' : '学期目录'}</a>` : '';
+  directory.hidden = true;
+  directory.open = false;
+}
+
+function finishNavigation(focus) {
+  if (!focus) return;
+  scrollTo(0, 0);
+  outlet.querySelector('h1')?.focus({ preventScroll: true });
+}
+
+async function render(focus = false) {
+  const version = ++routeVersion;
   playingPrompt?.pause();
   playingPrompt = undefined;
   const hash = location.hash;
-  const isHome = !hash || hash === '#/' || hash === '#lesson' || hash === '#directory';
-  const entry = hash.startsWith('#/lesson/') ? byId.get(hash.slice(9)) : null;
-  if (isHome) {
+  const lessonId = /^#\/lesson\/([^/]+)$/.exec(hash)?.[1];
+  const termId = /^#\/term\/(7a|7b|8a|8b)$/.exec(hash)?.[1] || termForLesson(lessonId);
+  const term = termsById.get(termId);
+  showLocation(term, Boolean(lessonId));
+  if (!hash || hash === '#/' || hash === '#lesson' || hash === '#directory') {
     renderHome();
-    updateDirectory();
-  } else if (!entry) {
-    showRecovery(null, true);
-    updateDirectory();
+  } else if (!term) {
+    showRecovery({ unknown: true });
   } else {
-    directory.open = false;
-    state.last = entry.id;
-    state.viewed = { ...state.viewed, [entry.id]: true };
-    saveState();
-    updateDirectory(entry.id);
-    document.title = entry.title + ' · 生物实验台';
+    if (!courseEntries.has(term.id)) {
+      outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">${term.title}</h1><p role="status">正在准备本册的观察材料……</p></section>`;
+      finishNavigation(focus);
+    }
+    let entry;
     try {
-      const data = lessonData[entry.id];
-      if (entry.id === 'cell') {
-        if (typeof renderCell !== 'function') throw new Error('cell');
-        renderCell(entry);
+      const entries = await loadTerm(term.id);
+      if (routeVersion !== version) return;
+      if (!lessonId) {
+        renderTerm(term, entries);
       } else {
-        if (!data) throw new Error('lesson data');
-        renderDiagramLesson(entry, data);
+        entry = entriesById.get(lessonId);
+        if (!entry) {
+          showRecovery({ term, unknown: true });
+        } else {
+          if (term.id === '7a') {
+            directory.hidden = false;
+            directory.querySelector('#contents').innerHTML = renderCatalogue(entries);
+          }
+          state.last = entry.id;
+          state.lastByTerm = { ...state.lastByTerm, [term.id]: entry.id };
+          state.viewed = { ...state.viewed, [entry.id]: true };
+          saveState();
+          updateDirectory(entry.id);
+          document.title = entry.title + ' · 生物实验台';
+          if (term.id !== '7a') {
+            renderTermLesson(entry);
+          } else if (entry.id === 'cell') {
+            if (typeof renderCell !== 'function') throw new Error('cell');
+            renderCell(entry);
+          } else {
+            const data = lessonData[entry.id];
+            if (!data) throw new Error('lesson data');
+            renderDiagramLesson(entry, data);
+          }
+        }
       }
     } catch (error) {
-      console.warn('Could not render this biology lesson', entry.id, error);
-      showRecovery(entry);
+      if (routeVersion !== version) return;
+      console.warn('Could not render this biology course', term.id, error);
+      showRecovery({ term, entry });
     }
   }
-  if (focus) {
-    scrollTo(0, 0);
-    outlet.querySelector('h1')?.focus({ preventScroll: true });
-  }
+  if (routeVersion === version) finishNavigation(focus);
 }
 
 directory.addEventListener('click', event => {
