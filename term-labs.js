@@ -70,7 +70,7 @@ function keepActivityFeedbackVisible(control, feedback, context = control) {
 }
 
 function renderBreathingPrediction(entry) {
-  if (entry.id !== '7b-human-breathing') return '';
+  if (entry.id !== '7b-human-breathing' || typeof paintBreath !== 'function') return '';
   return `<div class="breath-prediction" data-breath-prediction>
     <p>先猜一猜。膈往下移时，空气往哪儿走？</p>
     <canvas class="term-scene" width="300" height="104" role="img" aria-label="胸腔、肺和膈肌示意，尚未显示气流方向。" data-breath-neutral></canvas>
@@ -96,7 +96,8 @@ function mountSwitch(entry, host, record, feedback) {
   function show(index, chosen) {
     const scenario = activity.states[index];
     for (const button of controls) button.setAttribute('aria-pressed', String(Number(button.dataset.frame) === index));
-    frame.innerHTML = renderTermVisual(entry, index) + optionalEvidence(scenario.rows);
+    const visual = typeof renderTermVisual === 'function' ? renderTermVisual(entry, index) : '';
+    frame.innerHTML = visual + optionalEvidence(scenario.rows);
     const breath = frame.querySelector('[data-breath]');
     if (breath) paintBreath(breath, index);
     paintActivityArt(frame);
@@ -154,7 +155,9 @@ function mountSwitch(entry, host, record, feedback) {
 
 function mountDraft(entry, host, record, feedback) {
   const activity = entry.activity;
-  mountEyeBench(host, record.eye, eye => saveActivityField(entry.id, 'eye', eye));
+  if (typeof mountEyeBench === 'function') {
+    mountEyeBench(host, record.eye, eye => saveActivityField(entry.id, 'eye', eye));
+  }
   const inputs = [...host.querySelectorAll('[data-draft]')];
   const draft = Array.isArray(record.draft) ? record.draft.map(value => typeof value === 'string' ? value.slice(0, 400) : '') : [];
   const history = host.querySelector('[data-draft-history]');
@@ -292,11 +295,14 @@ function renderTermLesson(entry) {
   if (!activity || !entry.review) throw new Error('activity missing');
   const extra = typeof renderExtraLab === 'function' ? renderExtraLab(entry) : '';
   const extraPrompts = {
+    '7b-urine-formation': '跟着原尿中的物质走两站',
+    '8a-animal-development': '对比两条发育路线',
+    '8b-organisms-and-environment': '在校园图上选两个气温测点',
     '8b-animal-groups': '在鲫鱼和小虾身上找结构',
     '8b-ecosystem': '把草地里的能量流向连起来',
     '8a-build-tree': '用共同特征摆一棵进化树',
   };
-  const replaceActivity = Boolean(extra && ['8b-animal-groups', '8b-ecosystem'].includes(entry.id));
+  const replaceActivity = Boolean(extra && activity.kind !== 'project');
   const safety = entry.safety ? `<aside class="term-safety" aria-label="现实中遇到时"><strong>现实中遇到时</strong>
     <p>${escape(entry.safety)}</p>
     ${entry.source ? `<a href="${escape(entry.source.url)}" target="_blank" rel="noopener noreferrer">${escape(entry.source.label)} ↗</a>` : ''}</aside>` : '';
@@ -305,13 +311,13 @@ function renderTermLesson(entry) {
     ${renderTermAudio()}</header>
     ${activity.kind === 'project' ? '' : '<p class="activity-caption">教学示意</p>'}
     ${renderBreathingPrediction(entry)}
-    ${renderEyeBench(entry)}
+    ${typeof renderEyeBench === 'function' ? renderEyeBench(entry) : ''}
     ${extra}
     ${replaceActivity ? '' : activityMarkup(activity)}
     <p class="activity-feedback" role="status" data-feedback></p>
   </section>
-  <details class="more-activity term-takeaway"><summary>用一句话连回课本</summary>
+  <section class="concept-summary"><h2>用一句话连回课本</h2>
     <p>${escape(entry.takeaway)}</p>
-  </details>` + renderTermReview() + following(entry);
+  </section>` + renderTermReview(entry) + following(entry);
   mountTermActivity(entry, replaceActivity);
 }

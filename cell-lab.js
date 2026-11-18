@@ -28,7 +28,7 @@ function cellPhoto(name, { main = false, mini = false, compare = false, lazy = f
   return `<figure class="cell-photo${mini ? ' cell-photo-mini' : ''}" data-photo="${name}">
     <div class="cell-image-box">
       <img class="cell-image" alt="" tabindex="-1" decoding="async" ${main ? 'fetchpriority="high"' : ''} ${lazy ? 'loading="lazy"' : ''}>
-      ${main ? '<button class="cell-reticle" type="button" aria-label="取景框，点按放大，可拖动或用方向键移动"></button>' : ''}
+      ${main ? '<button class="cell-reticle" type="button" aria-label="取景框，点按放大，可拖动或用方向键移动"><span aria-hidden="true">↔</span></button>' : ''}
       ${mini ? '<span class="cell-reticle" aria-hidden="true"></span>' : ''}
       ${compare ? `<button class="cell-spot" type="button" data-cell-spot="0" aria-pressed="false"><span aria-hidden="true">A</span></button>
       <button class="cell-spot" type="button" data-cell-spot="1" aria-pressed="false"><span aria-hidden="true">B</span></button>` : ''}
@@ -41,7 +41,9 @@ function cellPhoto(name, { main = false, mini = false, compare = false, lazy = f
 function renderCell(entry) {
   outlet.innerHTML = intro(entry, '放大会看到更多吗？') + `
     <section class="experiment cell-lab" aria-labelledby="zoom-title">
-      <header class="section-heading"><h2 id="zoom-title">猜一猜，再看显微照片</h2></header>
+      <header class="section-heading"><h2 id="zoom-title">猜一猜，再看显微照片</h2>
+        <p class="cell-small-note">拖动照片中带箭头的圆框，选一处放大。</p>
+      </header>
       <div class="station cell-station cell-zoom-station">
         <div class="cell-microscope">
           ${cellPhoto('onion', { main: true })}
@@ -65,15 +67,17 @@ function renderCell(entry) {
       <header class="section-heading"><h2 id="compare-title">换一种材料，在图上找证据</h2></header>
       <div class="station cell-station">
         <div class="cell-samples">
+          <div class="cell-sample-tabs" role="group" aria-label="换对照样本">
+            <span>换样本</span>
+            <button type="button" class="choice" data-sample="leaf" aria-pressed="false">伊乐藻叶片</button>
+            <button type="button" class="choice" data-sample="cheek" aria-pressed="false">口腔上皮</button>
+          </div>
+          <p class="cell-photo-task" data-sample-task></p>
           ${cellPhoto('reference', { lazy: true })}
           ${cellPhoto('compare', { compare: true, lazy: true })}
         </div>
         <div class="controls cell-controls">
           <p class="feedback cell-feedback" data-sample-feedback role="status"></p>
-          <div class="cell-guesses" role="group" aria-label="和洋葱表皮对照的样本">
-            <button type="button" class="choice" data-sample="leaf" aria-pressed="false">伊乐藻叶片</button>
-            <button type="button" class="choice" data-sample="cheek" aria-pressed="false">口腔上皮</button>
-          </div>
           <p class="cell-small-note">图片的比例不同，用来比较外形和可见结构。</p>
         </div>
       </div>
@@ -401,6 +405,7 @@ function mountCellZoom(record, save, creditObservation) {
 function mountCellSamples(record, save, creditObservation) {
   const referenceFigure = outlet.querySelector('[data-photo="reference"]');
   const comparisonFigure = outlet.querySelector('[data-photo="compare"]');
+  const task = outlet.querySelector('[data-sample-task]');
   const status = outlet.querySelector('[data-sample-feedback]');
   const spots = [...comparisonFigure.querySelectorAll('[data-cell-spot]')];
   const samples = [...outlet.querySelectorAll('[data-sample]')];
@@ -410,6 +415,7 @@ function mountCellSamples(record, save, creditObservation) {
   function show() {
     const sample = CELL_SAMPLES[record.sample];
     const selected = record.observations[record.sample];
+    task.textContent = sample.task + ' 点右图的 A 或 B。';
     referenceFigure.querySelector('figcaption').textContent = CELL_SAMPLES.onion.name;
     comparisonFigure.querySelector('figcaption').textContent = sample.name;
     samples.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.sample === record.sample)));
@@ -422,7 +428,7 @@ function mountCellSamples(record, save, creditObservation) {
       button.setAttribute('aria-pressed', String(selected === index));
     });
     status.textContent = comparison.ready
-      ? selected === undefined ? sample.task : selected === sample.answer ? sample.found : sample.hint
+      ? selected === undefined ? '' : selected === sample.answer ? sample.found : sample.hint
       : comparison.failed ? '对照照片暂不可见。可以重试，也可以看看下面的细胞结构模型。' : '正在加载对照照片。';
   }
   samples.forEach(button => button.addEventListener('click', () => {

@@ -1,8 +1,7 @@
 'use strict';
 
 const outlet = document.querySelector('#lesson');
-const directory = document.querySelector('#directory');
-const directorySummary = directory.querySelector('summary');
+const firstBook = document.querySelector('#first-book').content;
 const route = id => '#/lesson/' + id;
 const termRoute = id => '#/term/' + id;
 const terms = [
@@ -12,7 +11,7 @@ const terms = [
   { id: '8b', title: '八年级下册', theme: '生物与环境 · 生物学与社会', color: 'moss', count: 16 },
 ];
 const termsById = new Map(terms.map(term => [term.id, term]));
-const legacy = [...directory.querySelectorAll('a[data-page]')].map(link => ({
+const legacy = [...firstBook.querySelectorAll('a[data-page]')].map(link => ({
   id: link.hash.slice(9),
   title: link.querySelector('span').textContent,
   chapter: link.closest('.directory-chapter').querySelector('h3').textContent,
@@ -34,6 +33,7 @@ const locationNav = document.querySelector('#course-location');
 const edition = document.querySelector('#edition');
 let routeVersion = 0;
 let renderedLesson = null;
+let resumeReviewId;
 const directoryPositions = new Map();
 const lessonPositions = new Map();
 let historyEntry;
@@ -72,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=8`;
+    script.src = `./term-${id}.js?v=9`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -102,10 +102,14 @@ function cleanState(raw) {
   for (const entry of legacy) {
     if (plainRecord(raw[entry.id])) clean[entry.id] = raw[entry.id];
   }
-  for (const key of ['viewed', 'practiced', 'checked', 'reviewed', 'titles', 'notes', 'reviews', 'projects', 'guesses', 'activities']) {
+  for (const key of ['viewed', 'practiced', 'checked', 'reviewed', 'reviewOpen', 'titles', 'notes', 'reviews', 'projects', 'guesses', 'activities']) {
     if (!plainRecord(raw[key])) continue;
-    clean[key] = Object.fromEntries(Object.entries(raw[key]).filter(([id, value]) =>
-      termForLesson(id) && (key !== 'titles' || typeof value === 'string' && value.trim() && value.length <= 100)));
+    clean[key] = Object.fromEntries(Object.entries(raw[key]).filter(([id, value]) => {
+      if (!termForLesson(id)) return false;
+      if (key === 'titles') return typeof value === 'string' && value.trim() && value.length <= 100;
+      if (key === 'reviewOpen') return typeof value === 'boolean';
+      return true;
+    }));
   }
   return clean;
 }
@@ -152,9 +156,7 @@ function saveActivityField(id, field, value, index) {
     record[field] = value;
   }
   state.activities = { ...state.activities, [id]: record };
-  const saved = saveState();
-  updateDirectory(document.querySelector('.directory a[aria-current="page"]')?.dataset.entryId);
-  return saved;
+  return saveState();
 }
 
 function activityDraftHistory(id) {
@@ -169,18 +171,16 @@ function escape(value = '') {
   })[char]);
 }
 
-function updateDirectory(current) {
+function updateDirectory() {
   for (const link of document.querySelectorAll('a[data-entry-id]')) {
     const id = link.dataset.entryId;
-    if (id === current) link.setAttribute('aria-current', 'page');
-    else link.removeAttribute('aria-current');
     const draft = state.projects?.[id]?.draft ?? state.activities?.[id]?.draft;
     const hasDraft = draft && Object.values(draft).some(value => Array.isArray(value) ? value.length > 0 :
       typeof value === 'string' ? Boolean(value.trim()) : Boolean(value));
-    link.querySelector('.directory-status').textContent = hasDraft ? '有草稿' :
-      Object.hasOwn(state.reviewed ?? {}, id) ? '已试复习' :
+    const learning = state.reviewed?.[id] === true ? '复习答对' : state.reviewed?.[id] === false ? '复习试过' :
       state.practiced?.[id] ? '做过练习' : state.checked?.[id] ? '已核对记录' :
       state.viewed?.[id] || state[id] ? '看过' : '';
+    link.querySelector('.directory-status').textContent = [learning, hasDraft ? '有草稿' : ''].filter(Boolean).join(' · ');
   }
 }
 
@@ -209,17 +209,17 @@ function markPracticed(entry) {
   if (!state.practiced?.[entry.id]) {
     state.practiced = { ...state.practiced, [entry.id]: true };
     saveState();
-    updateDirectory(entry.id);
   }
 }
 
 function markReviewAttempt(entry, correct) {
+  const note = outlet.querySelector('[data-review-note]');
+  if (note) note.hidden = false;
   const reviewed = state.reviewed ?? {};
   const outcome = reviewed[entry.id] === true || correct === true;
   if (reviewed[entry.id] === outcome) return;
   state.reviewed = { ...reviewed, [entry.id]: outcome };
   saveState();
-  updateDirectory(entry.id);
 }
 
 const diagramBestChoices = {
@@ -239,9 +239,12 @@ function intro(entry, question, description = '') {
     <p class="lesson-name">${entry.project ? '项目实践 · ' : ''}${escape(entry.title)}</p>
     <h1 id="lesson-title" tabindex="-1">${escape(question)}</h1>
     ${description ? `<p class="intro-copy">${escape(description)}</p>` : ''}
-    <details class="book-note"><summary>课本第 ${entry.page} 页起 · 回书要点</summary>
-      ${bookNotes.map(note => `<p>${escape(note)}</p>`).join('')}
-    </details>
+    <div class="lesson-tools">
+      <details class="book-note"><summary>课本第 ${entry.page} 页起</summary>
+        ${bookNotes.map(note => `<p>${escape(note)}</p>`).join('')}
+      </details>
+      <button type="button" class="text-control review-jump" aria-controls="lesson-review" data-review-jump hidden>换份材料复习 ↓</button>
+    </div>
   </header>`;
 }
 
@@ -448,7 +451,6 @@ function mountDiagram(entry, stage, index) {
     record.revealed = true;
     state.checked = { ...state.checked, [entry.id]: true };
     save();
-    updateDirectory(entry.id);
     redraw();
     rethink.focus({ preventScroll: true });
     alignEvidence(host, rethink);
@@ -475,10 +477,12 @@ function renderDiagramLesson(entry, data) {
   mountLearningAdditions(entry);
 }
 
-function renderQuiz(entry, name, activity) {
+function renderQuiz(name, activity) {
   const title = name === 'evidence' ? '从材料里找线索' : '换个例子再试';
   return `<section class="quick-check" data-quiz="${name}" aria-labelledby="${name}-title">
-    <h3 id="${name}-title">${title}</h3>
+    <header class="quiz-head"><h3 id="${name}-title">${title}</h3>
+      ${name === 'evidence' ? '<button type="button" class="text-control" data-listen>听题</button><span class="audio-feedback" role="status"></span>' : ''}
+    </header>
     <fieldset><legend>${escape(activity.question)}</legend>
       ${activity.correct.length > 1 ? '<p class="quiz-instruction">可以选多条线索。</p>' : ''}
       <div class="check-options">${activity.options.map((label, i) =>
@@ -545,23 +549,72 @@ function mountEvidenceChallenge(entry) {
   reset.addEventListener('click', () => { order.length = 0; update(); choices[0].focus({ preventScroll: true }); });
 }
 
+function renderReviewNote(entry) {
+  const visible = typeof state.notes?.[entry.id] === 'string' && state.notes[entry.id].trim() ||
+    Object.hasOwn(state.reviewed ?? {}, entry.id);
+  return `<div class="review-note" data-review-note ${visible ? '' : 'hidden'}>
+    <label for="evidence-note">用自己的话说说线索 <small>可选</small></label>
+    <textarea id="evidence-note" rows="2" maxlength="400" placeholder="我看到……，所以我暂时认为……"></textarea>
+    <p class="note-status" role="status"></p>
+  </div>`;
+}
+
+function setupLessonReview(entry, restorePosition) {
+  const review = outlet.querySelector('#lesson-review');
+  const jump = outlet.querySelector('[data-review-jump]');
+  if (!review || !jump) return false;
+  const summary = review.querySelector('summary');
+  const note = review.querySelector('#evidence-note');
+  const status = review.querySelector('.note-status');
+  note.value = typeof state.notes?.[entry.id] === 'string' ? state.notes[entry.id] : '';
+  note.addEventListener('input', () => {
+    state.notes = { ...state.notes, [entry.id]: note.value };
+    status.textContent = saveState() ? '已保存在这台设备。' : '这句话目前留在本页，可以复制带走。';
+  });
+
+  function remember(open) {
+    const historyRoute = history.state?.biologyRoute;
+    if (historyRoute?.hash === location.hash && historyRoute.reviewOpen !== open) {
+      try {
+        history.replaceState({ ...history.state, biologyRoute: { ...historyRoute, reviewOpen: open } }, '');
+      } catch {
+        // The local progress still stores the last deliberate action.
+      }
+    }
+    if (Boolean(state.reviewOpen?.[entry.id]) !== open) {
+      state.reviewOpen = { ...state.reviewOpen, [entry.id]: open };
+      saveState();
+    }
+  }
+
+  function scrollToReview() {
+    summary.scrollIntoView({ block: 'start', behavior: 'instant' });
+    summary.focus({ preventScroll: true });
+  }
+
+  jump.hidden = false;
+  jump.addEventListener('click', () => {
+    review.open = true;
+    remember(true);
+    scrollToReview();
+  });
+  if (restorePosition) review.open = true;
+  review.addEventListener('toggle', () => {
+    if (review.isConnected) remember(review.open);
+  });
+  return restorePosition;
+}
+
 function renderLearningAdditions(entry, summary = '', outside = '') {
   const data = globalThis.bioRevisions?.[entry.id];
   if (!data) return summary ? `<section class="reflection"><h2>学到了什么</h2><p>${escape(summary)}</p></section>` : '';
   return `<section class="learning-zone">
-    <details class="concept-note"><summary>把看到的现象和课本连起来</summary>
+    <section class="concept-summary"><h2>用一句话连回课本</h2>
       <p>${escape(data.concept || summary)}</p>
-      <button type="button" class="text-control listen-tip" data-listen>听找线索的题目</button>
-      <span class="audio-feedback" role="status"></span>
-    </details>
-    ${data.evidence ? renderQuiz(entry, 'evidence', data.evidence) : ''}
+    </section>
+    ${data.evidence ? renderQuiz('evidence', data.evidence) : ''}
     ${renderEvidenceChallenge(entry)}
-    <details class="more-activity"><summary>写一句我找到的证据</summary>
-      <label for="evidence-note">我看到……，所以我暂时认为……</label>
-      <textarea id="evidence-note" rows="2" maxlength="400"></textarea>
-      <p class="note-status" role="status">可以只写一句，也可以口头说给家人听。</p>
-    </details>
-    ${data.transfer ? `<details class="more-activity transfer-practice"><summary>换个例子复习</summary>${renderQuiz(entry, 'transfer', data.transfer)}</details>` : ''}
+    ${data.transfer ? `<details class="more-activity transfer-practice" id="lesson-review"><summary>换份材料复习</summary>${renderQuiz('transfer', data.transfer)}${renderReviewNote(entry)}</details>` : ''}
     ${outside ? `<p class="outside">${escape(outside)}</p>` : ''}
   </section>`;
 }
@@ -570,21 +623,13 @@ function mountLearningAdditions(entry) {
   const data = globalThis.bioRevisions?.[entry.id];
   if (!data) return;
   mountEvidenceChallenge(entry);
-  const note = outlet.querySelector('#evidence-note');
-  if (note) {
-    note.value = typeof state.notes?.[entry.id] === 'string' ? state.notes[entry.id] : '';
-    note.addEventListener('input', () => {
-      state.notes = { ...state.notes, [entry.id]: note.value };
-      outlet.querySelector('.note-status').textContent = saveState() ? '这句话已保存在这台设备。' : '这句话目前留在本页，可以复制带走。';
-    });
-  }
   for (const name of ['evidence', 'transfer']) {
     const section = outlet.querySelector(`[data-quiz="${name}"]`);
     if (!section) continue;
     const activity = data[name];
     const options = [...section.querySelectorAll('[data-answer]')];
     const feedback = section.querySelector('.feedback');
-    const previous = name === 'evidence' ? state.reviews?.[entry.id]?.evidence : null;
+    const previous = state.reviews?.[entry.id]?.[name];
     const chosen = new Set(Array.isArray(previous) ? previous.filter(value => options.some(option => option.dataset.answer === value)) : []);
     for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
     options.forEach(button => button.addEventListener('click', () => {
@@ -600,13 +645,15 @@ function mountLearningAdditions(entry) {
       }
       for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
       feedback.textContent = '';
-      if (name === 'evidence') {
-        state.reviews = { ...state.reviews, [entry.id]: { evidence: [...chosen] } };
-        saveState();
-      }
+      delete section.dataset.result;
+      const record = { ...state.reviews?.[entry.id], [name]: [...chosen] };
+      if (name === 'transfer') record.transferChecked = false;
+      state.reviews = { ...state.reviews, [entry.id]: record };
+      saveState();
     }));
-    section.querySelector('[data-check]').addEventListener('click', () => {
+    function check(remember = true) {
       if (!chosen.size || chosen.has('unsure')) {
+        delete section.dataset.result;
         feedback.textContent = `可以先看看这个提示，再试一次。${activity.hint || '先找一条能回答问题的观察记录。'}`;
         return;
       }
@@ -616,14 +663,25 @@ function mountLearningAdditions(entry) {
       const openPlantSample = photoStation && outlet.querySelector('[data-sample=leaf][aria-pressed="true"]');
       const qualifier = photoUnavailable ? '照片暂不可见，这次先根据题目里的文字记录判断。'
         : photoStation && !openPlantSample ? '想用照片再核对，可在上方切回伊乐藻。' : '';
-      feedback.textContent = (correct ? photoUnavailable ? '选择和文字记录吻合。' : '这次判断和材料吻合。' : '这次的证据还不够。') + qualifier + activity.explain;
-      if (name === 'transfer') markReviewAttempt(entry, correct);
-      else {
+      section.dataset.result = correct ? 'correct' : 'retry';
+      const result = correct ? (photoUnavailable ? '选择和文字记录吻合。' : '答对了。') : '还需对照。';
+      feedback.textContent = result + qualifier + activity.explain;
+      if (!remember) return;
+      if (name === 'transfer') {
+        markReviewAttempt(entry, correct);
+        const record = { ...state.reviews?.[entry.id], transferChecked: true };
+        state.reviews = { ...state.reviews, [entry.id]: record };
+        saveState();
+      } else {
         state.checked = { ...state.checked, [entry.id]: true };
         if (correct) markPracticed(entry);
         saveState();
-        updateDirectory(entry.id);
       }
+    }
+    if (name === 'transfer' && state.reviews?.[entry.id]?.transferChecked) check(false);
+    section.querySelector('[data-check]').addEventListener('click', event => {
+      check();
+      if (typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(event.currentTarget, feedback);
     });
   }
   const listen = outlet.querySelector('[data-listen]');
@@ -652,12 +710,12 @@ function renderHome() {
       <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
       <p class="intro-copy">课前先猜一猜，课后换份材料再试。按学期找到正在学的内容。</p>
     </header>
-    ${lastTerm ? `<nav class="lesson-next hub-resume" aria-label="继续学习"><a class="next-lesson" href="${route(state.last)}">
-      <span><small>继续上次 · ${lastTerm.title}</small><strong data-resume-title>${escape(savedTitle || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
+    ${lastTerm ? `<nav class="lesson-next hub-resume" aria-label="继续学习"><a class="next-lesson" href="${route(state.last)}" data-resume-lesson="${state.last}">
+      <span><small>${state.reviewOpen?.[state.last] === true ? '继续上次的复习' : '继续上次'} · ${lastTerm.title}</small><strong data-resume-title>${escape(savedTitle || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
     </a></nav>` : ''}
     <div class="term-grid" aria-label="四册课本">
       ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card term-${term.color}">
-        <span class="term-card-copy"><strong>${term.title}</strong><span>${term.theme}</span></span><span aria-hidden="true">→</span>
+        <span class="term-card-copy"><strong>${term.title}</strong><span>${term.theme} · ${term.count} 项</span></span><span aria-hidden="true">→</span>
       </a>`).join('')}
     </div>
   </section>
@@ -707,14 +765,19 @@ function renderHome() {
 
 function renderTerm(term, entries) {
   document.title = term.title + ' · 生物实验台';
-  const last = entriesById.get(state.lastByTerm?.[term.id]);
+  const recent = entriesById.get(state.lastByTerm?.[term.id]);
+  const last = recent?.term === term.id ? recent : null;
+  const example = last || entries[0];
+  const reviewing = last && state.reviewOpen?.[last.id] === true;
+  const practiceCount = entries.filter(entry => Object.hasOwn(state.reviewed ?? {}, entry.id)).length;
   outlet.innerHTML = `<section class="term-page">
     <header class="intro">
       <h1 id="lesson-title" tabindex="-1">${term.title}</h1>
       <p class="intro-copy">${term.theme}</p>
+      <p class="progress-count">${entries.length} 项学习内容${practiceCount ? ` · ${practiceCount} 项已试过复习` : ''}</p>
     </header>
-    <nav class="lesson-next term-start" aria-label="从本册开始"><a class="next-lesson" href="${route((last || entries[0]).id)}">
-      <span><small>${last ? '继续读本册' : '从本册第一课开始'}</small><strong>${escape((last || entries[0]).title)}</strong></span><span aria-hidden="true">→</span>
+    <nav class="lesson-next term-start" aria-label="从本册开始"><a class="next-lesson" href="${route(example.id)}" ${last ? `data-resume-lesson="${last.id}"` : ''}>
+      <span><small>${reviewing ? '继续上次的复习' : last ? '继续读本册' : '从本册第一课开始'}</small><strong>${escape(example.title)}</strong></span><span aria-hidden="true">→</span>
     </a></nav>
     <section class="term-contents" aria-label="课本目录">${renderCatalogue(entries)}</section>
   </section>`;
@@ -725,9 +788,9 @@ function showRecovery({ term, entry, unknown = false } = {}) {
   const title = unknown ? '没找到这一课' : entry ? '这节课的材料暂时没载入' : '这册的目录暂时没载入';
   document.title = title + ' · 生物实验台';
   outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">${title}</h1>
-    <p${unknown ? '' : ' role="status"'}>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。` : '可以重新载入，或从学期目录选一课。'}</p>
+    <p${unknown ? '' : ' role="status"'}>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。` : unknown ? '可以从目录找到要学的课。' : '可以重新载入，或从学期目录选一课。'}</p>
     ${unknown ? '' : '<button type="button" class="action" data-reload>重新载入</button>'}
-    <a href="${entry && term ? termRoute(term.id) : '#/'}">${entry && term ? '回到本册目录' : '回到学期目录'}</a>
+    ${term && (entry || unknown) ? '' : '<a href="#/">回到学期目录</a>'}
   </section>`;
   outlet.querySelector('[data-reload]')?.addEventListener('click', () => {
     if (entry || term?.id === '7a') location.reload();
@@ -738,10 +801,7 @@ function showRecovery({ term, entry, unknown = false } = {}) {
 function showLocation(term, inLesson) {
   edition.textContent = term ? '北京版 · ' + term.title : '北京版 · 初中生物';
   locationNav.hidden = !term;
-  const bookLink = inLesson && term?.id !== '7a';
-  locationNav.innerHTML = term ? `<a href="${bookLink ? termRoute(term.id) : '#/'}">← ${bookLink ? term.title + '目录' : '学期目录'}</a>` : '';
-  directory.hidden = true;
-  directory.open = false;
+  locationNav.innerHTML = term ? `<a href="${inLesson ? termRoute(term.id) : '#/'}">← ${inLesson ? term.title + '目录' : '学期目录'}</a>` : '';
 }
 
 function lessonScrollForRoute(lessonId) {
@@ -789,6 +849,10 @@ async function render(focus = false) {
   const hash = location.hash;
   const lessonId = /^#\/lesson\/([^/]+)$/.exec(hash)?.[1];
   const lessonScroll = lessonScrollForRoute(lessonId);
+  const historyRoute = history.state?.biologyRoute;
+  const reviewing = Boolean(lessonId && (historyRoute?.hash === hash && historyRoute.reviewOpen === true ||
+    resumeReviewId === lessonId && state.reviewOpen?.[lessonId] === true));
+  resumeReviewId = undefined;
   playingPrompt?.stop();
   const termId = /^#\/term\/(7a|7b|8a|8b)$/.exec(hash)?.[1] || termForLesson(lessonId);
   const term = termsById.get(termId);
@@ -814,17 +878,12 @@ async function render(focus = false) {
         if (!entry) {
           showRecovery({ term, unknown: true });
         } else {
-          if (term.id === '7a') {
-            directory.hidden = false;
-            directory.querySelector('#contents').innerHTML = renderCatalogue(entries);
-          }
           renderedLesson = entry;
           state.last = entry.id;
           state.lastByTerm = { ...state.lastByTerm, [term.id]: entry.id };
           state.titles = { ...state.titles, [entry.id]: entry.title };
           state.viewed = { ...state.viewed, [entry.id]: true };
           saveState();
-          updateDirectory(entry.id);
           document.title = entry.title + ' · 生物实验台';
           if (term.id !== '7a') {
             renderTermLesson(entry);
@@ -835,6 +894,15 @@ async function render(focus = false) {
             const data = lessonData[entry.id];
             if (!data) throw new Error('lesson data');
             renderDiagramLesson(entry, data);
+          }
+          const restoreReview = setupLessonReview(entry, reviewing);
+          if (restoreReview && !lessonScroll) {
+            requestAnimationFrame(() => {
+              if (routeVersion !== version) return;
+              const resume = outlet.querySelector('#lesson-review summary');
+              resume.scrollIntoView({ block: 'start', behavior: 'instant' });
+              if (focus) resume.focus({ preventScroll: true });
+            });
           }
         }
       }
@@ -848,22 +916,15 @@ async function render(focus = false) {
 }
 
 outlet.addEventListener('click', event => {
+  const resume = event.target.closest('[data-resume-lesson]');
+  if (resume && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    resumeReviewId = resume.dataset.resumeLesson;
+  }
   const link = event.target.closest('.term-contents [data-entry-id]');
   if (!link) return;
   const id = link.dataset.entryId;
   const term = termForLesson(id);
   if (term) directoryPositions.set(term, { id, top: Math.max(8, link.getBoundingClientRect().top) });
-});
-
-directory.addEventListener('click', event => {
-  if (event.target.closest('a')) directory.open = false;
-});
-directory.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && directory.open) {
-    event.preventDefault();
-    directory.open = false;
-    directorySummary.focus();
-  }
 });
 document.querySelector('.skip').addEventListener('click', event => {
   event.preventDefault();

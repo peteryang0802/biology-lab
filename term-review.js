@@ -1,9 +1,10 @@
 'use strict';
 
-function renderTermReview() {
-  return `<details class="more-activity term-review" data-term-review>
-    <summary>换个例子复习</summary>
+function renderTermReview(entry) {
+  return `<details class="more-activity term-review" id="lesson-review" data-term-review>
+    <summary>换份材料复习</summary>
     <div data-review-content></div>
+    ${renderReviewNote(entry)}
   </details>`;
 }
 
@@ -15,17 +16,18 @@ function mountTermReview(entry, record) {
   const history = Array.isArray(record.reviewHistory) ? record.reviewHistory.filter(item =>
     plainRecord(item) && Object.hasOwn(variants, item.variant) &&
     Number.isInteger(item.choice) && Boolean(variants[item.variant].options[item.choice])) : [];
-  const previousVariant = history.at(-1)?.variant || (Number.isInteger(record.review) ? 'base' : null);
-  let variant = variants.alternate && previousVariant === 'base' ? 'alternate' : 'base';
-  let attemptId;
-  let answered = false;
-  let resetOnOpen = false;
+  const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  const saved = record.reviewRun;
+  const validRun = plainRecord(saved) && Object.hasOwn(variants, saved.variant) && typeof saved.id === 'string';
+  const legacy = Number.isInteger(record.review) && variants.base.options[record.review] ? { variant: 'base', choice: record.review } : null;
+  const current = validRun ? history.find(attempt => attempt.id === saved.id && attempt.variant === saved.variant) : history.at(-1) || legacy;
+  let variant = validRun ? saved.variant : current?.variant || 'base';
+  let attemptId = current?.id || (validRun ? saved.id : makeId());
 
-  function newAttempt() {
-    attemptId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-    answered = false;
+  function showAttempt(answered) {
     const activity = variants[variant];
-    const previous = history.at(-1);
+    const previous = history.filter(attempt => attempt.id !== attemptId).at(-1);
+    delete content.dataset.result;
     content.innerHTML = `<h2 tabindex="-1">${escape(activity.prompt)}</h2>
       <p class="review-instruction">先想一句理由，再选一个核对。</p>
       <div class="choice-row" role="group" aria-label="选择自己的判断">
@@ -41,11 +43,17 @@ function mountTermReview(entry, record) {
     const feedback = content.querySelector('[role="status"]');
     const options = [...content.querySelectorAll('[data-review-option]')];
     const again = content.querySelector('[data-review-again]');
-    options.forEach((button, index) => button.addEventListener('click', () => {
-      feedback.textContent = activity.options[index][1];
-      for (const option of options) option.setAttribute('aria-pressed', String(option === button));
+
+    function showAnswer(index) {
+      const correct = index === activity.answer;
+      content.dataset.result = correct ? 'correct' : 'retry';
+      feedback.textContent = (correct ? '答对了。' : '还需对照。') + activity.options[index][1].replace(/^对。/, '');
+      options.forEach((option, i) => option.setAttribute('aria-pressed', String(i === index)));
       again.hidden = false;
-      answered = true;
+    }
+    if (answered?.variant === variant) showAnswer(answered.choice);
+    options.forEach((button, index) => button.addEventListener('click', () => {
+      showAnswer(index);
       const attempt = {id: attemptId, at: Date.now(), variant, choice: index};
       const known = history.findIndex(item => item.id === attemptId);
       if (known >= 0) history.splice(known, 1);
@@ -55,28 +63,19 @@ function mountTermReview(entry, record) {
       keepActivityFeedbackVisible(button, feedback);
     }));
     content.querySelector('[data-review-hint]').addEventListener('click', event => {
+      delete content.dataset.result;
       feedback.textContent = activity.hint || '先找一条和题目直接有关的记录。还没有把握，可以先回看上面的材料。';
       keepActivityFeedbackVisible(event.currentTarget, feedback);
     });
     again.addEventListener('click', () => {
-      advance();
+      if (variants.alternate) variant = variant === 'base' ? 'alternate' : 'base';
+      attemptId = makeId();
+      saveActivityField(entry.id, 'reviewRun', { id: attemptId, variant });
+      showAttempt();
       const prompt = content.querySelector('h2');
       prompt.focus({preventScroll: true});
       prompt.scrollIntoView({block: 'nearest'});
     });
   }
-
-  function advance() {
-    if (variants.alternate) variant = variant === 'base' ? 'alternate' : 'base';
-    newAttempt();
-  }
-
-  root.addEventListener('toggle', () => {
-    if (!root.open && answered) resetOnOpen = true;
-    if (root.open && resetOnOpen) {
-      resetOnOpen = false;
-      advance();
-    }
-  });
-  newAttempt();
+  showAttempt(current);
 }

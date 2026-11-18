@@ -375,7 +375,262 @@ function renderBottleLab() {
   </section>`;
 }
 
+const urineTraces = {
+  glucose: {
+    name: '葡萄糖', destination: '通常几乎全回到血液',
+    clue: '原尿里检得出葡萄糖，原尿会沿着肾小管继续流动。跟着葡萄糖，看它后来到哪。',
+    result: '一部分葡萄糖先进入原尿，随后通常几乎全被肾小管重吸收、回到血液。',
+  },
+  urea: {
+    name: '尿素', destination: '其中一部分随尿液排出',
+    clue: '原尿里也有尿素。沿着肾小管看，尿液这条路上有没有它。',
+    result: '尿素进入原尿，其中一部分留在尿液里。尿液从肾脏流经输尿管、膀胱和尿道。图只跟踪随尿液排出的那部分。',
+  },
+};
+
+function renderUrineLab() {
+  return `<section class="extra-lab" data-visual-lab="urine" aria-label="追踪原尿中的物质">
+    <p class="lab-instruction">选一种物质，再拨到下一站，看它最后去了哪。</p>
+    <div class="lab-selector" role="group" aria-label="选择要追踪的物质">
+      ${Object.entries(urineTraces).map(([id, item]) => `<button type="button" class="choice" data-urine-trace="${id}" aria-pressed="false">${item.name}</button>`).join('')}
+    </div>
+    <div class="urine-journey" aria-label="物质移动路线" data-urine-journey>
+      <div><strong>血液</strong><span data-urine-part="blood"></span></div>
+      <div><strong>肾小囊里的原尿</strong><span data-urine-part="filter"></span></div>
+      <div><strong>流经肾小管后</strong><span data-urine-part="destination"></span></div>
+    </div>
+    <div class="lab-selector" role="group" aria-label="选择观察站">
+      <button type="button" class="choice" data-urine-step="0" aria-pressed="true">第一站 · 滤过</button>
+      <button type="button" class="choice" data-urine-step="1" aria-pressed="false">第二站 · 重吸收</button>
+    </div>
+    <p class="activity-feedback" data-visual-feedback role="status"></p>
+  </section>`;
+}
+
+function mountUrineLab(lab, values, save, priorFrame) {
+  const traces = [...lab.querySelectorAll('[data-urine-trace]')];
+  const steps = [...lab.querySelectorAll('[data-urine-step]')];
+  const route = lab.querySelector('[data-urine-journey]');
+  const feedback = lab.querySelector('[data-visual-feedback]');
+  let trace = Object.hasOwn(urineTraces, values.urineTrace) ? values.urineTrace : 'glucose';
+  let step = (values.urineStep ?? priorFrame) === 1 ? 1 : 0;
+
+  function show() {
+    const item = urineTraces[trace];
+    traces.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.urineTrace === trace)));
+    steps.forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.urineStep) === step)));
+    route.dataset.trace = trace;
+    route.dataset.station = step;
+    route.querySelector('[data-urine-part="blood"]').textContent = `含有${item.name}`;
+    route.querySelector('[data-urine-part="filter"]').textContent = `一部分${item.name}滤出`;
+    route.querySelector('[data-urine-part="destination"]').textContent = step === 0 ? '等你去看' : item.destination;
+    feedback.textContent = step ? item.result : item.clue;
+  }
+
+  function update(button) {
+    values.urineTrace = trace;
+    values.urineStep = step;
+    show();
+    save();
+    keepLabVisible(lab, button, feedback);
+  }
+
+  traces.forEach(button => button.addEventListener('click', () => {
+    trace = button.dataset.urineTrace;
+    update(button);
+  }));
+  steps.forEach(button => button.addEventListener('click', () => {
+    step = Number(button.dataset.urineStep);
+    update(button);
+  }));
+  show();
+}
+
+const insectStages = [
+  ['卵', '卵', '卵', 'egg', 'egg'],
+  ['孵化', '幼虫（毛毛虫）', '若虫（小蝗虫）', 'larva', 'nymph'],
+  ['接着长', '蛹', '若虫继续蜕皮', 'pupa', 'nymph'],
+  ['成虫', '成虫（蝴蝶）', '成虫（蝗虫）', 'butterfly', 'locust'],
+];
+
+const insectPredictions = {
+  butterfly: '蝴蝶',
+  locust: '蝗虫',
+  unsure: '还不确定',
+};
+
+const insectClues = [
+  '两种昆虫都从卵开始。下一步，对比它们孵出来时有多像成虫。',
+  '蝴蝶幼虫和成虫样子差很多。蝗虫若虫已经有和成虫相似的头、胸、腹和三对足，翅还没长好。',
+  '蝴蝶有蛹期。蝗虫若虫靠多次蜕皮逐渐长成成虫，途中没有蛹。',
+  '蝴蝶经历卵、幼虫、蛹、成虫，是完全变态。蝗虫经历卵、若虫、成虫，是不完全变态。',
+];
+
+function paintInsectStage(canvas, stage, locust) {
+  const ctx = setCanvasSize(canvas, 128, 64);
+  if (!ctx) return;
+  if (stage === 'egg') {
+    for (const [x, y] of [[50, 31], [65, 23], [81, 36], [62, 45]]) {
+      fillOval(ctx, x, y, 10, 7, locust ? '#e5cba3' : '#fff6d9', '#84664b');
+    }
+  } else if (stage === 'larva') {
+    for (let i = 0; i < 6; i++) {
+      fillOval(ctx, 34 + 12 * i, 40 - Math.sin(i) * 5, 9, 10, '#94bd66', '#486d2e');
+    }
+    fillOval(ctx, 27, 33, 10, 10, '#c0d782', '#486d2e');
+    fillOval(ctx, 23, 30, 1.7, 1.7, '#304c40');
+  } else if (stage === 'pupa') {
+    strokeDiagram(ctx, [[38, 9], [84, 9]], '#705b42', 4);
+    fillPath(ctx, 'M60 11 Q49 19 53 30 Q45 43 63 57 Q80 46 76 27 Q70 17 66 11Z', '#93b57a', '#3e5c49');
+    strokeDiagram(ctx, [[56, 29], [63, 35], [73, 32]], '#486d53');
+    strokeDiagram(ctx, [[56, 39], [65, 44], [71, 42]], '#486d53');
+  } else if (stage === 'butterfly') {
+    fillPath(ctx, 'M62 35 C49 2 14 2 19 20 Q21 37 43 40 Q19 44 36 55 Q48 61 62 38Z', '#efb071', '#905732');
+    fillPath(ctx, 'M66 35 C79 2 114 2 109 20 Q107 37 85 40 Q109 44 92 55 Q80 61 66 38Z', '#efb071', '#905732');
+    fillOval(ctx, 64, 36, 4, 17, '#5f4e39');
+    strokeDiagram(ctx, [[63, 22], [60, 12], [55, 9]], '#5f4e39');
+    strokeDiagram(ctx, [[65, 22], [68, 12], [73, 9]], '#5f4e39');
+  } else {
+    const adult = stage === 'locust';
+    fillOval(ctx, 70, 32, adult ? 34 : 23, 8, '#8ca969', '#496746');
+    fillOval(ctx, adult ? 42 : 48, 28, 10, 10, '#a2bf79', '#496746');
+    fillOval(ctx, adult ? 39 : 45, 25, 2, 2, '#263e2d');
+    strokeDiagram(ctx, [[42, 23], [31, 14], [23, 11]], '#496746');
+    strokeDiagram(ctx, [[42, 22], [37, 11], [30, 5]], '#496746');
+    strokeDiagram(ctx, [[55, 36], [46, 46], [36, 49]], '#496746');
+    strokeDiagram(ctx, [[59, 38], [53, 49], [47, 52]], '#496746');
+    strokeDiagram(ctx, [[73, 34], [86, 18], [94, 49], [105, 52]], '#496746', 3.4);
+    fillPath(ctx, adult ? 'M51 26 Q77 19 108 34 Q85 39 52 34Z' :
+      'M53 29 Q71 23 77 30 Q68 35 54 34Z', '#b6c082', '#496746');
+  }
+}
+
+function renderInsectLab() {
+  return `<section class="extra-lab" data-visual-lab="insects" aria-label="对比蝴蝶和蝗虫的发育轨迹">
+    <div class="insect-prediction" data-insect-prediction>
+      <p class="lab-instruction">先猜一猜，哪一种昆虫会经历蛹期？</p>
+      <div class="lab-selector" role="group" aria-label="预测哪种昆虫有蛹期">
+        ${Object.entries(insectPredictions).map(([id, label]) => `<button type="button" class="choice" data-insect-guess="${id}">${label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="lab-selector insect-selector" data-insect-steps hidden role="group" aria-label="选择发育阶段">
+      ${insectStages.map(([label], index) => `<button type="button" class="choice" data-insect-stage="${index}" aria-pressed="false">${label}</button>`).join('')}
+    </div>
+    <div class="insect-stages">
+      ${['蝴蝶', '蝗虫'].map((name, index) => `<figure>
+        <canvas width="128" height="64" aria-hidden="true"></canvas>
+        <figcaption><strong>${name}</strong><span data-insect-label="${index}"></span></figcaption>
+      </figure>`).join('')}
+    </div>
+    <p class="activity-feedback" data-visual-feedback role="status"></p>
+    <p class="lab-instruction">图只对比阶段，不按两种动物的真实发育时间比例绘制。</p>
+  </section>`;
+}
+
+function mountInsectLab(lab, values, save) {
+  const controls = [...lab.querySelectorAll('[data-insect-stage]')];
+  const canvases = [...lab.querySelectorAll('canvas')];
+  const labels = [...lab.querySelectorAll('[data-insect-label]')];
+  const feedback = lab.querySelector('[data-visual-feedback]');
+  const prediction = lab.querySelector('[data-insect-prediction]');
+  const steps = lab.querySelector('[data-insect-steps]');
+  let guess = Object.hasOwn(insectPredictions, values.insectGuess) ? values.insectGuess : null;
+  let stage = Number.isInteger(values.insectStage) && insectStages[values.insectStage] ? values.insectStage : 0;
+
+  function show() {
+    const [, butterfly, locust, first, second] = insectStages[stage];
+    prediction.hidden = Boolean(guess);
+    steps.hidden = !guess;
+    controls.forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.insectStage) === stage)));
+    paintInsectStage(canvases[0], first, false);
+    paintInsectStage(canvases[1], second, true);
+    labels[0].textContent = butterfly;
+    labels[1].textContent = locust;
+    const comparison = stage === 2 && guess && guess !== 'unsure' ? `你刚才猜的是${insectPredictions[guess]}。看图对照：` : '';
+    feedback.textContent = guess ? comparison + insectClues[stage] : '';
+  }
+  for (const button of prediction.querySelectorAll('[data-insect-guess]')) {
+    button.addEventListener('click', () => {
+      guess = button.dataset.insectGuess;
+      values.insectGuess = guess;
+      show();
+      save();
+      controls[0].focus({preventScroll:true});
+      keepLabVisible(lab, controls[0], feedback);
+    });
+  }
+  controls.forEach(button => button.addEventListener('click', () => {
+    stage = Number(button.dataset.insectStage);
+    values.insectStage = stage;
+    show();
+    save();
+    keepLabVisible(lab, button, feedback);
+  }));
+  show();
+}
+
+const shadeLabels = ['树荫草地', '日照草地', '日照马路'];
+const shadeReadings = [24, 30, 33];
+
+function renderShadeLab() {
+  return `<section class="extra-lab" data-visual-lab="shade" aria-label="在校园图上选两个气温测点">
+    <p class="lab-instruction">哪两点最适合比树荫的影响？在校园示意图上选两个测点。再点一下可以取消。</p>
+    <div class="shade-board">
+      <div class="shade-map" role="group" aria-label="校园三处气温测点">
+        <i class="shade-canopy" aria-hidden="true"></i>
+        ${shadeLabels.map((label, index) => `<button class="choice shade-spot" type="button" data-shade-spot="${index}" aria-pressed="false"><span>${'甲乙丙'[index]}</span>${label}</button>`).join('')}
+      </div>
+      <div class="shade-records" data-shade-records aria-label="所选测点的模拟记录"></div>
+    </div>
+    <p class="activity-feedback" data-visual-feedback role="status"></p>
+    <button type="button" class="text-control lab-hint" data-shade-hint>还不确定</button>
+  </section>`;
+}
+
+function mountShadeLab(lab, values, save, complete, legacyItems) {
+  const controls = [...lab.querySelectorAll('[data-shade-spot]')];
+  const records = lab.querySelector('[data-shade-records]');
+  const feedback = lab.querySelector('[data-visual-feedback]');
+  const saved = values.shadeSpots ?? legacyItems;
+  let selection = Array.isArray(saved)
+    ? [...new Set(saved.filter(id => Number.isInteger(id) && shadeLabels[id]))].slice(-2)
+    : [];
+
+  function show() {
+    controls.forEach(button => button.setAttribute('aria-pressed', String(selection.includes(Number(button.dataset.shadeSpot)))));
+    records.innerHTML = selection.length ? selection.map(id => `<div class="shade-reading">
+      <small>${'甲乙丙'[id]} · ${id === 2 ? '16:00 · 马路' : '13:00 · 草地'}</small><strong>${shadeReadings[id]} ℃</strong></div>`).join('')
+      : '<span class="lab-instruction">测温记录会显示在这里。</span>';
+    if (selection.length < 2) {
+      feedback.textContent = selection.length === 1 ? '还差一个可对照的测点。看看地面和记录时间是否相同。' : '';
+      return false;
+    }
+    if (selection.includes(2)) {
+      feedback.textContent = '丙点换了地面和测量时间。气温差里可能混有其他影响。换一对再试。';
+      return false;
+    }
+    feedback.textContent = '这对的地面和时段相同。模拟记录里，树荫下比日照处低 6 ℃，只说明这次对应测点的差异。';
+    return true;
+  }
+  controls.forEach(button => button.addEventListener('click', () => {
+    const id = Number(button.dataset.shadeSpot);
+    selection = selection.includes(id) ? selection.filter(value => value !== id) : [...selection, id].slice(-2);
+    values.shadeSpots = selection;
+    if (show()) complete();
+    save();
+    keepLabVisible(lab, button, feedback);
+  }));
+  lab.querySelector('[data-shade-hint]').addEventListener('click', event => {
+    feedback.textContent = '想只比树荫，先找地面类型和时段都相同、一个有树荫一个有日照的两点。';
+    keepLabVisible(lab, event.currentTarget, feedback);
+  });
+  show();
+}
+
 function renderExtraLab(entry) {
+  if (entry.id === '7b-urine-formation') return renderUrineLab();
+  if (entry.id === '8a-animal-development') return renderInsectLab();
+  if (entry.id === '8b-organisms-and-environment') return renderShadeLab();
   if (entry.id === '8b-animal-groups') return renderAnimalLab();
   if (entry.id === '8b-ecosystem') return renderChainLab();
   if (entry.id === '8a-build-tree') return renderTreeLab();
@@ -661,7 +916,10 @@ function mountExtraLab(host, entry, record, persist) {
     persist();
   }
   const complete = () => markPracticed(entry);
-  if (lab.dataset.visualLab === 'animals') mountAnimalLab(lab, values, save, complete);
+  if (lab.dataset.visualLab === 'urine') mountUrineLab(lab, values, save, record.frame);
+  else if (lab.dataset.visualLab === 'insects') mountInsectLab(lab, values, save);
+  else if (lab.dataset.visualLab === 'shade') mountShadeLab(lab, values, save, complete, record.items);
+  else if (lab.dataset.visualLab === 'animals') mountAnimalLab(lab, values, save, complete);
   else if (lab.dataset.visualLab === 'chain') mountChainLab(lab, values, save, complete, record.items);
   else if (lab.dataset.visualLab === 'tree') mountTreeLab(lab, values, save, complete);
   else if (lab.dataset.visualLab === 'bottle') mountBottleLab(lab, values, save);

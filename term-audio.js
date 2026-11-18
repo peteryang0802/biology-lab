@@ -1,6 +1,9 @@
 'use strict';
 
 const promptAudioVersions = {
+  '7b-urine-formation': 6,
+  '8a-animal-development': 6,
+  '8b-organisms-and-environment': 6,
   photosynthesis: 6,
   'plant-transport': 7,
   '7b-plant-breathing': 6,

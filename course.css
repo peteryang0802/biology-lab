@@ -1,16 +1,10 @@
-.directory { margin: 0 0 16px; }
 .brand { min-height: 44px; }
 .brand:hover .brand-text { text-decoration: underline; }
-.directory > summary { width: fit-content; min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--accent-deep); font-weight: 700; }
-.directory > summary::before { content: ""; width: .6em; height: .6em; border: solid currentColor; border-width: 0 2px 2px 0; rotate: -45deg; }
-.directory[open] > summary::before { rotate: 45deg; }
-.directory[open] #contents { display: grid; gap: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .unit h2 { font-size: 1.02rem; }
 .directory-chapter { margin-top: 8px; }
 .directory-chapter h3 { font-size: .84rem; color: var(--muted); }
 .directory-chapter a { display: flex; align-items: center; gap: 7px; width: fit-content; min-height: 44px; font-size: .90rem; }
 .directory-chapter small { color: var(--muted); font-weight: 500; }
-.directory-chapter a[aria-current] { color: var(--ink); font-weight: 700; }
 .lesson-name { color: var(--muted); font-size: .91rem; margin-bottom: 6px; }
 .diagram-panel { width: 100%; padding: 13px 10px 10px; background: #e7ede0; color: var(--ink); }
 .diagram-items { width: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: stretch; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -25,7 +19,6 @@
 .lesson-next small, .lesson-next strong { display: block; }
 .lesson-next small { color: var(--muted); font-size: .74rem; }
 .lesson-end { margin-top: 18px; color: var(--muted); }
-@media (min-width: 740px) { .directory[open] #contents { grid-template-columns: 1fr 1fr; } }
 @media (max-height: 465px) and (orientation: landscape) {
   .diagram-panel { align-content: start; }
   .diagram-items canvas { max-width: 110px; }

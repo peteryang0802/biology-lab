@@ -35,8 +35,8 @@
 .hub-resume { margin: 0 0 13px; }
 .course-location { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 34px; color: var(--muted); font-size: .86rem; }
 .course-location a { display: inline-flex; align-items: center; min-height: 44px; }
-.course-location + .directory { margin-bottom: 12px; }
 .term-start { margin: 0 0 15px; }
+.term-page .progress-count { margin-top: 4px; font-size: .88rem; }
 .term-contents { display: grid; gap: 12px; }
 .term-contents .unit {
   min-width: 0;
@@ -53,7 +53,6 @@
 .chapter-page { margin-inline-start: auto; align-self: center; flex: 0 0 auto; color: var(--muted); font-size: .70rem; }
 .directory-status { flex: 0 0 auto; }
 .directory-status:empty { display: none; }
-.directory .chapter-page { display: none; }
 .term-activity {
   display: grid;
   gap: 9px;

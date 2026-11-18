@@ -8,25 +8,25 @@
   <title>生物实验台 · 北京版初中生物</title>
   <link rel="icon" type="image/png" href="./favicon.png" sizes="32x32">
   <link rel="stylesheet" href="./styles.css?v=3">
-  <link rel="stylesheet" href="./course.css?v=3">
-  <link rel="stylesheet" href="./cell-lab.css?v=4">
+  <link rel="stylesheet" href="./course.css?v=4">
+  <link rel="stylesheet" href="./cell-lab.css?v=5">
   <link rel="stylesheet" href="./project-labs.css?v=3">
-  <link rel="stylesheet" href="./learning.css?v=4">
-  <link rel="stylesheet" href="./terms.css?v=6">
-  <link rel="stylesheet" href="./term-visuals.css?v=6">
+  <link rel="stylesheet" href="./learning.css?v=5">
+  <link rel="stylesheet" href="./terms.css?v=7">
+  <link rel="stylesheet" href="./term-visuals.css?v=7">
   <script defer src="./unit-one.js?v=4"></script>
   <script defer src="./unit-two.js?v=5"></script>
   <script defer src="./diagrams.js?v=4"></script>
   <script defer src="./scenes.js?v=4"></script>
-  <script defer src="./revisions.js?v=6"></script>
+  <script defer src="./revisions.js?v=7"></script>
   <script defer src="./project-labs.js?v=3"></script>
-  <script defer src="./cell-lab.js?v=4"></script>
-  <script defer src="./term-visuals.js?v=7"></script>
-  <script defer src="./term-audio.js?v=8"></script>
-  <script defer src="./term-review.js?v=5"></script>
-  <script defer src="./term-labs.js?v=6"></script>
+  <script defer src="./cell-lab.js?v=5"></script>
+  <script defer src="./term-visuals.js?v=8"></script>
+  <script defer src="./term-audio.js?v=9"></script>
+  <script defer src="./term-review.js?v=6"></script>
+  <script defer src="./term-labs.js?v=7"></script>
   <script defer src="./progress.js?v=5"></script>
-  <script defer src="./app.js?v=8"
+  <script defer src="./app.js?v=9"
     onerror="document.querySelector('.course-hub').hidden = true; document.querySelector('[data-startup-error]').hidden = false; document.querySelector('#lesson').setAttribute('aria-labelledby', 'startup-error-title')"></script>
 </head>
 <body>
@@ -37,9 +37,8 @@
   </div></header>
   <main id="main" class="wrap">
     <nav class="course-location" id="course-location" aria-label="所在学期" hidden></nav>
-    <details class="directory" id="directory" hidden>
-      <summary>课本目录</summary>
-      <div id="contents">
+    <p id="storage-status" class="storage-status" role="status" hidden></p>
+    <template id="first-book">
         <section class="unit">
           <h2>第一单元 认识生命</h2>
           <div class="directory-chapter">
@@ -72,8 +71,7 @@
             <a href="#/lesson/aed-map" data-page="120" data-project><span>自动体外除颤仪的社区推广</span></a>
           </div>
         </section>
-      </div>
-    </details>
+    </template>
     <article id="lesson" aria-labelledby="lesson-title" tabindex="-1">
       <section class="course-hub">
         <header class="hub-intro">
@@ -94,7 +92,6 @@
       </section>
       <noscript><p>浏览器已关闭 JavaScript。开启后可查看四册目录并使用课内互动。</p></noscript>
     </article>
-    <p id="storage-status" class="storage-status" role="status" hidden></p>
   </main>
   <footer class="site-footer"><div class="wrap">北京版初中生物 · 四册配套观察与实验</div></footer>
 </body>
