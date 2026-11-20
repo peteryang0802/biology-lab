@@ -71,8 +71,8 @@
   font: inherit;
   cursor: pointer;
 }
-.parent-settings-actions [data-parent-submit] { border-color: var(--parent-button); background: var(--parent-button); color: #fffdf7; }
-.parent-settings-actions [data-parent-submit].parent-clear-button { border-color: var(--parent-danger); background: var(--parent-danger); }
+#parent-settings-dialog [data-parent-submit] { border-color: var(--parent-button); background: var(--parent-button); color: #fffdf7; }
+#parent-settings-dialog [data-parent-submit].parent-clear-button { border-color: var(--parent-danger); background: var(--parent-danger); }
 .parent-settings-actions button:disabled { opacity: .65; cursor: wait; }
 .parent-settings-dialog :focus-visible { outline: 3px solid #4f7ba8; outline-offset: 2px; }
 @media (prefers-color-scheme: dark) {
