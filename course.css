@@ -1,5 +1,4 @@
 .brand { min-height: 44px; }
-.brand:hover .brand-text { text-decoration: underline; }
 .unit h2 { font-size: 1.02rem; }
 .directory-chapter { margin-top: 8px; }
 .directory-chapter h3 { font-size: .84rem; color: var(--muted); }

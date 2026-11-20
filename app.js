@@ -5,10 +5,10 @@ const firstBook = document.querySelector('#first-book').content;
 const route = id => '#/lesson/' + id;
 const termRoute = id => '#/term/' + id;
 const terms = [
-  { id: '7a', title: '七年级上册', theme: '认识生命 · 营养和运输', color: 'leaf', count: 14 },
-  { id: '7b', title: '七年级下册', theme: '呼吸、排泄与生命活动调节', color: 'river', count: 14 },
-  { id: '8a', title: '八年级上册', theme: '生殖发育 · 遗传变异 · 进化', color: 'clay', count: 14 },
-  { id: '8b', title: '八年级下册', theme: '生物与环境 · 生物学与社会', color: 'moss', count: 16 },
+  { id: '7a', title: '七年级上册', theme: '认识生命 · 营养和运输', count: 14 },
+  { id: '7b', title: '七年级下册', theme: '呼吸、排泄与生命活动调节', count: 14 },
+  { id: '8a', title: '八年级上册', theme: '生殖发育 · 遗传变异 · 进化', count: 14 },
+  { id: '8b', title: '八年级下册', theme: '生物与环境 · 生物学与社会', count: 16 },
 ];
 const termsById = new Map(terms.map(term => [term.id, term]));
 const legacy = [...firstBook.querySelectorAll('a[data-page]')].map(link => ({
@@ -29,10 +29,9 @@ const progress = typeof createProgressStore === 'function'
   ? createProgressStore(storageKey, cleanState, 'school-parent:reset:biology') : temporaryProgressStore();
 const state = progress.state;
 const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
-const locationNav = document.querySelector('#course-location');
 const edition = document.querySelector('#edition');
-const brand = document.querySelector('.site-header .brand');
 const directoryExit = document.querySelector('.lesson-directory-exit');
+const directoryExitLabel = directoryExit.querySelector('[data-directory-label]');
 let routeVersion = 0;
 let renderedLesson = null;
 let resumeReviewId;
@@ -186,7 +185,7 @@ function updateDirectory() {
   }
 }
 
-function renderCatalogue(entries) {
+function renderCatalogue(entries, firstToStudy) {
   function group(items, key) {
     const groups = new Map();
     for (const item of items) {
@@ -200,7 +199,7 @@ function renderCatalogue(entries) {
     <h2>${escape(unit)}</h2>
     ${[...group(lessons, 'chapter')].map(([chapter, list]) => `<div class="directory-chapter">
       <h3>${escape(chapter)}</h3>
-      ${list.map(entry => `<a href="${route(entry.id)}" data-entry-id="${entry.id}" ${entry.project ? 'data-project' : ''}>
+      ${list.map(entry => `<a href="${route(entry.id)}" data-entry-id="${entry.id}" ${entry.project ? 'data-project' : ''} ${entry === firstToStudy ? 'data-directory-start' : ''}>
         <span>${escape(entry.title)}${entry.project ? ' <small>项目实践</small>' : ''}</span><small class="directory-status"></small><span class="chapter-page">第 ${entry.page} 页</span>
       </a>`).join('')}
     </div>`).join('')}
@@ -838,14 +837,14 @@ function renderHome() {
   const savedTitle = last?.title || state.titles?.[state.last];
   outlet.innerHTML = `<section class="course-hub">
     <header class="hub-intro">
-      <h1 id="lesson-title" tabindex="-1">今天想弄明白什么？</h1>
-      <p class="intro-copy">课前先猜一猜，课后换份材料再试。按学期找到正在学的内容。</p>
+      <h1 id="lesson-title" tabindex="-1">${lastTerm ? '继续上次的学习' : '选一本生物课本'}</h1>
     </header>
     ${lastTerm ? `<nav class="lesson-next hub-resume" aria-label="继续学习"><a class="next-lesson" href="${route(state.last)}" data-resume-lesson="${state.last}">
-      <span><small>${state.reviewOpen?.[state.last] === true ? '继续上次的复习' : '继续上次'} · ${lastTerm.title}</small><strong data-resume-title>${escape(savedTitle || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
+      <span><small>${lastTerm.title}${state.reviewOpen?.[state.last] === true ? ' · 继续复习' : ''}</small><strong data-resume-title>${escape(savedTitle || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
     </a></nav>` : ''}
+    ${lastTerm ? '<h2 class="term-picker-title">按学期找课</h2>' : ''}
     <div class="term-grid" aria-label="四册课本">
-      ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card term-${term.color}">
+      ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card">
         <span class="term-card-copy"><strong>${term.title}</strong><span>${term.theme} · ${term.count} 项</span></span><span aria-hidden="true">→</span>
       </a>`).join('')}
     </div>
@@ -898,30 +897,41 @@ function renderTerm(term, entries) {
   document.title = term.title + ' · 生物实验台';
   const recent = entriesById.get(state.lastByTerm?.[term.id]);
   const last = recent?.term === term.id ? recent : null;
-  const example = last || entries[0];
   const reviewing = last && state.reviewOpen?.[last.id] === true;
   const practiceCount = entries.filter(entry => Object.hasOwn(state.reviewed ?? {}, entry.id)).length;
+  const resumeQuestion = last && (globalThis.bioLessonPractice?.[last.id]?.prompt
+    || globalThis.bioOpeningSeven?.[last.id]?.[0] || globalThis.bioOpeningEight?.[last.id]?.[0]);
   outlet.innerHTML = `<section class="term-page">
     <header class="intro">
       <h1 id="lesson-title" tabindex="-1">${term.title}</h1>
       <p class="intro-copy">${term.theme}</p>
-      <p class="progress-count">${entries.length} 项学习内容${practiceCount ? ` · ${practiceCount} 项已试过复习` : ''}</p>
     </header>
-    <nav class="lesson-next term-start" aria-label="从本册开始"><a class="next-lesson" href="${route(example.id)}" ${last ? `data-resume-lesson="${last.id}"` : ''}>
-      <span><small>${reviewing ? '继续上次的复习' : last ? '继续读本册' : '从本册第一课开始'}</small><strong>${escape(example.title)}</strong></span><span aria-hidden="true">→</span>
-    </a></nav>
-    <section class="term-contents" aria-label="课本目录">${renderCatalogue(entries)}</section>
+    <div class="directory-layout">
+      <aside class="directory-overview" aria-label="本册学习概况">
+        <h2>本册目录</h2><p>${entries.length} 项学习内容</p>
+        ${practiceCount ? `<p>${practiceCount} 项已试过复习</p>` : ''}
+      </aside>
+      <div class="directory-lessons">
+        ${last ? `<nav class="lesson-next term-start" aria-label="继续读本册"><a class="next-lesson" href="${route(last.id)}" data-resume-lesson="${last.id}">
+          <span><small>${reviewing ? '继续上次的复习' : '继续上次'}</small><strong>${escape(last.title)}</strong></span><span aria-hidden="true">→</span>
+        </a></nav>${resumeQuestion ? `<p class="directory-question">${escape(resumeQuestion)}</p>` : ''}` : ''}
+        <section class="term-contents" aria-label="按课本顺序选课">${renderCatalogue(entries, last ? null : entries[0])}</section>
+      </div>
+    </div>
   </section>`;
   updateDirectory();
 }
 
 function showRecovery({ term, entry, unknown = false } = {}) {
-  const title = unknown ? '没找到这一课' : entry ? '这节课的材料暂时没载入' : '这册的目录暂时没载入';
+  const missingBook = unknown && location.hash.startsWith('#/term/');
+  const title = unknown ? missingBook ? '没找到这一册' : '没找到这一课'
+    : entry ? '这节课的材料暂时没载入' : '这册的目录暂时没载入';
   document.title = title + ' · 生物实验台';
   outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">${title}</h1>
-    <p${unknown ? '' : ' role="status"'}>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。` : unknown ? '可以从目录找到要学的课。' : '可以重新载入，或从学期目录选一课。'}</p>
+    <p${unknown ? '' : ' role="status"'}>${entry ? `可以先翻纸书第 ${entry.page} 页 · ${escape(entry.title)}。`
+      : missingBook ? '回到课本入口可以选学期。' : unknown ? '可以从目录找到要学的课。' : '可以重新载入，或从课本入口选一册。'}</p>
     ${unknown ? '' : '<button type="button" class="action" data-reload>重新载入</button>'}
-    ${term && (entry || unknown) ? '' : '<a href="#/">回到学期目录</a>'}
+    ${term ? '' : '<a href="#/">回到全部课本</a>'}
   </section>`;
   outlet.querySelector('[data-reload]')?.addEventListener('click', () => {
     if (entry || term?.id === '7a') location.reload();
@@ -930,21 +940,14 @@ function showRecovery({ term, entry, unknown = false } = {}) {
 }
 
 function showLocation(term, inLesson) {
-  edition.textContent = term ? '北京版 · ' + term.title : '北京版 · 初中生物';
-  const hasLessonExit = Boolean(term && inLesson);
-  edition.hidden = hasLessonExit;
-  directoryExit.hidden = !hasLessonExit;
-  if (hasLessonExit) {
-    directoryExit.href = termRoute(term.id);
-    brand.removeAttribute('href');
-    brand.removeAttribute('aria-label');
+  edition.hidden = Boolean(term);
+  directoryExit.hidden = !term;
+  if (term) {
+    directoryExit.href = inLesson ? termRoute(term.id) : '#/';
+    directoryExitLabel.textContent = inLesson ? '本册目录' : '全部课本';
   } else {
     directoryExit.removeAttribute('href');
-    brand.href = '#/';
-    brand.setAttribute('aria-label', '生物实验台，返回学习入口');
   }
-  locationNav.hidden = !term || hasLessonExit;
-  locationNav.innerHTML = term && !hasLessonExit ? '<a href="#/">← 学期目录</a>' : '';
 }
 
 function lessonScrollForRoute(lessonId) {
