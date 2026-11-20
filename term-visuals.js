@@ -630,9 +630,11 @@ function mountShadeLab(lab, values, save, complete, legacyItems) {
     records.removeAttribute('data-evidence');
     choices.forEach(button => button.setAttribute('aria-pressed',
       String(answered && (button.dataset.shadeAnswer === 'true') === values.shadeConclusionAnswer)));
+    const result = values.shadeConclusionFirst === false ? ' 首次判断正确。'
+      : values.shadeConclusionEvidence === true ? ' 已回看记录并改对。' : ' 提示后改对。';
     explanation.textContent = !answered ? '' : correct
       ? '这两个模拟测点在这一次记录中相差 6 ℃。想知道别处或别的日子是否也一样，要在相同条件下多测几次。'
-        + (values.shadeConclusionFirst === false ? ' 首次判断正确。' : ' 已根据记录改对。')
+        + result
       : '“总能”把一次结果用到了所有地方和时段。甲、乙都只记录了同一天 13:00，先看看这两条记录，再改一次判断。';
     evidence.hidden = !answered;
     transfer.hidden = !correct;
@@ -699,6 +701,10 @@ function mountShadeLab(lab, values, save, complete, legacyItems) {
     keepActivityFeedbackVisible(button, explanation);
   }));
   evidence.addEventListener('click', () => {
+    if (values.shadeConclusionAnswer === true && values.shadeConclusionEvidence !== true) {
+      values.shadeConclusionEvidence = true;
+      save();
+    }
     back.hidden = false;
     records.dataset.evidence = 'true';
     focusNear(records);
