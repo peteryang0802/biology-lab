@@ -1,0 +1,260 @@
+/* One calm reading surface. The illustration, feedback and controls each
+   keep a distinct shape, even when the device uses a dark color scheme. */
+#lesson .lesson-flow {
+  --flow-material: #edf2e9;
+  --flow-rule: var(--border);
+  max-width: 54rem;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.lesson-flow .intro {
+  display: block;
+  max-width: 40rem;
+  margin: 0 0 clamp(10px, 2.6vw, 22px);
+}
+
+.lesson-flow .intro .eyebrow {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.lesson-flow .intro h1 {
+  font-family: inherit;
+  font-size: clamp(1.43rem, 3.7vw, 2.15rem);
+  font-weight: 750;
+  line-height: 1.28;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.lesson-flow .intro .lesson-name { margin-bottom: 4px; }
+.lesson-flow .intro-copy { line-height: 1.55; }
+
+.lesson-flow .flow-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 14px;
+  margin-bottom: clamp(16px, 3vw, 26px);
+  border-block-end: 1px solid var(--flow-rule);
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.lesson-flow .flow-position { margin-inline-end: auto; }
+.lesson-flow .flow-opening { max-width: 42rem; }
+.lesson-flow .flow-questions {
+  margin: 8px 0 0;
+  padding: 0 0 0 1.65em;
+  line-height: 1.55;
+  font-size: clamp(1.04rem, 2.8vw, 1.18rem);
+}
+.lesson-flow .flow-questions li { padding-inline-start: .2em; }
+.lesson-flow .flow-questions li + li { margin-top: 10px; }
+.lesson-flow .flow-questions li::marker {
+  color: var(--accent-deep);
+  font-size: .83em;
+  font-weight: 650;
+}
+
+.lesson-flow .flow-pane,
+.lesson-flow .flow-pane > * { min-width: 0; }
+
+.lesson-flow .flow-pane > h2,
+.lesson-flow .flow-opening > h2 {
+  font-size: clamp(1.13rem, 3vw, 1.43rem);
+  font-weight: 720;
+  line-height: 1.36;
+  text-wrap: pretty;
+}
+
+.lesson-flow .flow-pane > h2 + p,
+.lesson-flow .flow-opening > h2 + p { margin-top: 6px; }
+.lesson-flow :is(.flow-pane, .flow-opening) :is(h2, h3)[tabindex="-1"] { scroll-margin-block: 12px; }
+
+.lesson-flow .flow-pane :is(.experiment, .transfer) { margin-block-end: 12px; }
+
+.lesson-flow .flow-pane .station {
+  border-color: var(--flow-rule);
+  border-radius: 14px;
+  background: transparent;
+}
+
+.lesson-flow .flow-pane .diagram-panel { background: var(--flow-material); }
+.lesson-flow .flow-pane .diagram-panel figcaption { color: var(--muted); }
+.lesson-flow .flow-pane .station > .diagram-panel { border-block-end: 1px solid var(--flow-rule); }
+.lesson-flow .flow-pane .controls { background: var(--surface); }
+
+.lesson-flow .flow-pane .term-activity {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.lesson-flow .flow-pane .learning-zone { margin-top: 0; }
+.lesson-flow .flow-pane .quick-check {
+  margin: 0 0 12px;
+  padding: 5px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.lesson-flow .flow-pane .concept-summary {
+  margin: 0 0 14px;
+  border-inline-start-width: 2px;
+  background: transparent;
+}
+.lesson-flow .flow-pane .review-note { margin-top: 12px; }
+.lesson-flow .flow-pane > .intro-copy { margin: 0 0 10px; }
+.lesson-flow .flow-extras[open] > .flow-questions {
+  margin-block: 0 12px;
+  font-size: .93rem;
+}
+.lesson-flow .flow-readings {
+  display: grid;
+  gap: 8px;
+  max-width: 30rem;
+  margin: 12px 0;
+}
+.lesson-flow .flow-readings > div {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 9px;
+}
+.lesson-flow .flow-reading-track {
+  display: block;
+  min-height: 12px;
+  border-inline-start: 2px solid var(--accent-deep);
+  background: var(--flow-material);
+}
+.lesson-flow .flow-reading-track i {
+  display: block;
+  width: var(--height-share);
+  height: 12px;
+  border-radius: 0 5px 5px 0;
+  background: var(--accent);
+}
+.lesson-flow .flow-pane > #lesson-review {
+  margin-block: 0 12px;
+  padding-inline: 0;
+  border: 0;
+  border-block-start: 1px solid var(--flow-rule);
+  border-radius: 0;
+  background: transparent;
+}
+
+.lesson-flow .flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 12px;
+  margin-top: clamp(15px, 4vw, 26px);
+}
+.lesson-flow .flow-actions .action { padding-inline: 16px; }
+.lesson-flow .lesson-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 20px;
+  margin-top: 24px;
+  padding-top: 3px;
+  border-block-start: 1px solid var(--flow-rule);
+}
+.lesson-flow .lesson-next .next-lesson {
+  display: inline-flex;
+  justify-content: flex-start;
+  gap: 7px;
+  min-height: 44px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.lesson-flow .lesson-next .next-lesson strong {
+  font-size: .86rem;
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-underline-offset: .19em;
+}
+.lesson-flow .flow-link,
+.lesson-flow .flow-nav [data-flow-menu] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 3px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-underline-offset: .19em;
+}
+
+.lesson-flow .flow-extras,
+.lesson-flow .flow-book {
+  margin-block: 13px 0;
+  border: 0;
+  border-block-start: 1px solid var(--flow-rule);
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.lesson-flow .flow-book { width: 100%; }
+.lesson-flow .flow-book p { margin-bottom: 8px; }
+.lesson-flow .flow-menu {
+  min-width: 0;
+  max-width: 100%;
+  margin-inline-start: auto;
+}
+.lesson-flow .flow-menu > :first-child { margin-inline-start: auto; width: fit-content; }
+.lesson-flow .flow-menu > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 11px;
+}
+.lesson-flow :is(.flow-book, .flow-extras, .flow-menu) > summary {
+  min-height: 44px;
+  padding-block: 9px;
+  color: var(--accent-deep);
+  font-size: .88rem;
+  font-weight: 620;
+}
+.lesson-flow :is(.flow-book, .flow-extras, .flow-menu)[open] > summary { margin-bottom: 4px; }
+.lesson-flow .flow-menu :is(ol, ul) { margin: 0 0 8px; padding-inline-start: 1.5em; }
+.lesson-flow .flow-menu [aria-current="step"] { font-weight: 750; }
+
+@media (min-width: 720px), (max-height: 500px) and (orientation: landscape) {
+  .lesson-flow .flow-pane .station > .diagram-panel {
+    border-block-end: 0;
+    border-inline-end: 1px solid var(--flow-rule);
+  }
+}
+
+@media (max-width: 560px) {
+  .lesson-flow .intro { margin-bottom: 12px; }
+  .lesson-flow .flow-nav { margin-bottom: 15px; }
+  .lesson-flow .flow-pane .controls { padding: 10px; }
+  .lesson-flow .flow-pane .check-options { display: grid; }
+  .lesson-flow .flow-pane .check-options button { min-width: 0; }
+}
+
+@media (max-height: 465px) and (orientation: landscape) {
+  .lesson-flow .intro,
+  .lesson-flow .flow-nav { margin-bottom: 8px; }
+  .lesson-flow .flow-questions li + li { margin-top: 5px; }
+  .lesson-flow .flow-actions { margin-top: 11px; }
+}
+
+@media (max-height: 350px) and (orientation: landscape) {
+  .lesson-flow .flow-nav { margin-bottom: 0; }
+  .lesson-flow .intro { margin-bottom: 2px; }
+  .lesson-flow .flow-actions { margin-top: 6px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  #lesson .lesson-flow { --flow-material: #202e28; }
+}

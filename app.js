@@ -72,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=${id === '8a' ? 9 : 10}`;
+    script.src = `./term-${id}.js?v=${id === '8a' ? 9 : id === '8b' ? 11 : 10}`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -501,7 +501,11 @@ function renderEvidenceChallenge(entry) {
     <figure class="xylem-photo"><div data-xylem-photo></div><figcaption>另一份芹菜材料的显微实拍。蓝色的螺旋纹是导管壁上的结构，可帮助辨认导管。</figcaption></figure>
     <p class="credit">Tmatheus · <a href="https://commons.wikimedia.org/wiki/File:Helical_Protoxylem_of_Celery.png" target="_blank" rel="noopener">显微照片原作</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>，缩小并转为 WebP。</p></details>`;
   if (entry.id === 'research-methods') return `<section class="quick-check">
-    <h3>自己量一次</h3><p>甲豆苗从 4 厘米长到 6 厘米。记录时只写新增的长度。</p>
+    <h3>只算新长的部分</h3><p>甲豆苗周一高 4 厘米，周四高 6 厘米。它长高了多少？</p>
+    <figure class="flow-readings" aria-label="从同一基线比较甲豆苗两次高度">
+      <div><span>周一</span><span class="flow-reading-track" aria-hidden="true"><i style="--height-share: 66.6667%"></i></span><strong>4 厘米</strong></div>
+      <div><span>周四</span><span class="flow-reading-track" aria-hidden="true"><i style="--height-share: 100%"></i></span><strong>6 厘米</strong></div>
+    </figure>
     <form data-difference class="numeric-reading"><label for="height-difference">新增</label><input id="height-difference" type="number" min="0" inputmode="numeric" step="1" required><span>厘米</span><button type="submit">核对</button></form>
     <p class="feedback" role="status"></p></section>`;
   if (entry.id !== 'human-transport') return '';
@@ -596,6 +600,7 @@ function setupLessonReview(entry, restorePosition) {
 
   jump.hidden = false;
   jump.addEventListener('click', () => {
+    if (typeof showLessonFlowFor === 'function') showLessonFlowFor(review);
     review.open = true;
     remember(true);
     scrollToReview();
@@ -675,6 +680,10 @@ function mountLearningAdditions(entry) {
         return;
       }
       const correct = activity.correct.length === chosen.size && activity.correct.every(i => chosen.has(String(i)));
+      if (remember && correct && entry.id === 'research-methods' && name === 'evidence') {
+        const reading = section.closest('.flow-pane')?.querySelector('[data-difference]')?.closest('details');
+        if (reading) reading.open = true;
+      }
       const selected = [...chosen].map(Number);
       const option = selected[0];
       const wrong = selected.filter(index => !activity.correct.includes(index));
@@ -713,6 +722,7 @@ function mountLearningAdditions(entry) {
       const back = outlet.querySelector('[data-cell-back-to-quiz]');
       const model = outlet.querySelector('[data-cell-model]');
       function focusCellEvidence(target) {
+        if (typeof showLessonFlowFor === 'function') showLessonFlowFor(target);
         target.focus({ preventScroll: true });
         target.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
@@ -953,7 +963,8 @@ async function render(focus = false) {
             if (!data) throw new Error('lesson data');
             renderDiagramLesson(entry, data);
           }
-          const restoreReview = setupLessonReview(entry, reviewing);
+          const hasFlow = typeof mountLessonFlow === 'function' && mountLessonFlow(entry, reviewing);
+          const restoreReview = setupLessonReview(entry, !hasFlow && reviewing);
           if (restoreReview && !lessonScroll) {
             requestAnimationFrame(() => {
               if (routeVersion !== version) return;

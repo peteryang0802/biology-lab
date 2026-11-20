@@ -69,7 +69,8 @@ const legacyEvidenceTargets = {
 };
 
 function bindReviewEvidence(entry, trigger, visit = () => {}) {
-  const target = outlet.querySelector(legacyEvidenceTargets[entry.id] ||
+  const researchTransfer = entry.id === 'research-methods' && Boolean(trigger.closest('[data-quiz="transfer"]'));
+  const target = outlet.querySelector((researchTransfer ? '[data-scene="1"]' : legacyEvidenceTargets[entry.id]) ||
     '[data-term-activity], [data-project-id], [data-scene="0"]');
   if (!target || !reviewEvidenceCues[entry.id]) return;
   let guide = target.querySelector(':scope > [data-review-evidence-guide]');
@@ -82,10 +83,11 @@ function bindReviewEvidence(entry, trigger, visit = () => {}) {
     target.prepend(guide);
   }
   const cue = guide.querySelector('p');
-  cue.textContent = reviewEvidenceCues[entry.id];
+  cue.textContent = researchTransfer ? '对比两种安排，找出哪一种同时改变了水量和光照。' : reviewEvidenceCues[entry.id];
   trigger.hidden = false;
   trigger.addEventListener('click', () => {
     visit();
+    if (typeof showLessonFlowFor === 'function') showLessonFlowFor(target);
     for (let ancestor = target; ancestor && ancestor !== outlet; ancestor = ancestor.parentElement) {
       if (ancestor.tagName === 'DETAILS') ancestor.open = true;
     }
@@ -93,6 +95,7 @@ function bindReviewEvidence(entry, trigger, visit = () => {}) {
     guide.querySelector('button').onclick = () => {
       guide.hidden = true;
       const source = trigger.isConnected ? trigger : outlet.querySelector('[data-review-evidence]');
+      if (typeof showLessonFlowFor === 'function') showLessonFlowFor(source);
       source?.focus({ preventScroll: true });
       source?.scrollIntoView({ block: 'center', behavior: 'instant' });
     };
