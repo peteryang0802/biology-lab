@@ -109,6 +109,7 @@ function mountLessonFlow(entry, resumeReview) {
   const firstThought = document.createElement('p');
   firstThought.className = 'flow-first-thought';
   firstThought.hidden = true;
+  const checks = typeof bioObservationChecks !== 'undefined' ? bioObservationChecks[entry.id] : null;
   if (practice && observePhase) {
     opening.innerHTML = `<h2 id="flow-opening-question">${escape(practice.prompt || questions[0])}</h2>
       <p class="flow-opening-instruction">先选一个想法，接着用材料核对。</p>
@@ -130,6 +131,24 @@ function mountLessonFlow(entry, resumeReview) {
   } else {
     opening.innerHTML = '<h2>带着这两个问题学</h2>';
     opening.append(questionList);
+  }
+  if (checks?.observe && observePhase) {
+    const previousActivity = observePhase.content.findIndex(node => node.matches('.term-activity'));
+    if (previousActivity !== -1) {
+      observePhase.content.splice(previousActivity, 1, biologyObservationCheck(entry, 'observe', checks.observe));
+    }
+  }
+  if (checks?.review && reviewPhase) {
+    const legacyReview = review?.querySelector('[data-quiz="transfer"], [data-review-content]');
+    if (legacyReview) legacyReview.hidden = true;
+    const summary = reviewPhase.content.findIndex(node => node.matches('.concept-summary'));
+    if (summary !== -1) {
+      const wrap = flowDisclosure('核对后回看本课方法', [reviewPhase.content[summary]]);
+      wrap.classList.add('flow-after-review');
+      reviewPhase.content[summary] = wrap;
+    }
+    reviewPhase.content.unshift(biologyObservationCheck(entry, 'review', checks.review));
+    reviewPhase.action = '换份材料自己试';
   }
   reviewPhase?.content.push(flowDisclosure('回看开场两问', [questionList.cloneNode(true)]));
   phases.unshift({ id: 'start', label: practice ? '先试一个想法' : '先看问题', content: [opening] });
@@ -182,19 +201,22 @@ function mountLessonFlow(entry, resumeReview) {
 
   let current;
   let mainStep;
-  const taskSelector = '[data-quiz], [data-review-content]';
+  const taskSelector = '[data-quiz]:not([hidden]), [data-review-content]:not([hidden]), [data-observation-check]';
   function syncForward(phase) {
     if (!phase.forward) return;
     const tasks = Array.from(phase.pane.querySelectorAll(taskSelector));
     const retry = tasks.find(task => task.dataset.taskOutcome === 'retry');
     const ready = tasks.every(task => task.dataset.taskOutcome === 'correct');
     const canContinue = tasks.every(task => task.dataset.taskOutcome === 'correct' ||
-      task.dataset.taskOutcome === 'retry' && task.dataset.flowModeled === 'true');
+      task.dataset.taskOutcome === 'retry' && (task.dataset.flowModeled === 'true' ||
+        task.hasAttribute('data-observation-check')));
     phase.forward.hidden = !canContinue;
     phase.forward.classList.toggle('action', ready && !(phase.id === 'start' && practice && observePhase));
     phase.forward.textContent = retry && canContinue ? '先跳过，留作复习 →' : phase.forwardLabel;
     if (phase.retry) phase.retry.hidden = !retry ||
       Boolean(retry.querySelector('[data-cell-find-evidence].action:not([hidden])'));
+    const method = phase.pane.querySelector('.flow-after-review');
+    if (method) method.hidden = !ready;
     if (tasks.length) {
       phase.pane.dataset.flowOutcome = ready ? 'correct'
         : tasks.some(task => task.dataset.taskOutcome === 'retry') ? 'retry' : 'ready';
@@ -279,7 +301,7 @@ function mountLessonFlow(entry, resumeReview) {
       retry.hidden = true;
       retry.addEventListener('click', () => {
         const question = pane.querySelector('[data-task-outcome="retry"]');
-        const target = question?.querySelector('[data-answer], [data-review-option]');
+        const target = question?.querySelector('[data-answer], [data-review-option], [data-observation-pick]:enabled, [data-pick-record]:not([hidden])');
         target?.focus();
       });
       phase.retry = retry;
@@ -294,7 +316,13 @@ function mountLessonFlow(entry, resumeReview) {
       back.addEventListener('click', () => stepTo(previous));
       actions.append(back);
     }
-    pane.append(actions);
+    const optional = pane.querySelector('[data-observation-check] ~ details');
+    if (optional) {
+      actions.classList.add('observation-actions');
+      optional.before(actions);
+    } else {
+      pane.append(actions);
+    }
     content.append(pane);
 
     const marker = document.createElement('li');

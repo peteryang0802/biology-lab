@@ -456,3 +456,87 @@
     --flow-retry-line: #e8a96b;
   }
 }
+
+.lesson-flow .observation-check {
+  min-width: 0;
+  padding: clamp(11px, 1.35vw, 18px);
+  border: 1px solid var(--flow-rule);
+  border-radius: 12px;
+}
+.lesson-flow .observation-check h2 {
+  margin: 0 0 13px;
+  color: var(--flow-reflection-ink);
+  font-size: clamp(1.05rem, 2vw, 1.32rem);
+}
+.observation-grid {
+  display: grid;
+  gap: 11px;
+}
+.observation-check fieldset {
+  min-width: 0;
+  padding: 9px 11px 11px;
+  border: 1px solid var(--flow-rule);
+  border-radius: 8px;
+}
+.observation-check legend {
+  padding-inline: 5px;
+  font-weight: 700;
+}
+.observation-check .observation-records {
+  border-color: var(--flow-material-line);
+  background: var(--flow-material);
+  color: var(--flow-material-ink);
+}
+.observation-record + .observation-record { margin-block-start: 5px; }
+.observation-record > span {
+  display: block;
+  padding: 6px 7px;
+  border-inline-start: 2px solid var(--flow-material-line);
+  line-height: 1.44;
+}
+.observation-record [data-pick-record] { width: 100%; }
+.observation-record[data-evidence-found] > span {
+  border-inline-start-color: var(--flow-success-line);
+  background: var(--flow-success);
+  color: var(--flow-success-ink);
+}
+.observation-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.observation-check button[aria-pressed="true"] {
+  border-color: var(--flow-reflection-line);
+  background: var(--flow-reflection);
+  color: var(--flow-reflection-ink);
+}
+.observation-check [data-observation-order] {
+  margin: 8px 0 0;
+  min-height: 1.4em;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.observation-check .observation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-block: 10px 0;
+}
+.observation-check .feedback { margin-block: 8px 0; }
+.lesson-flow .flow-actions.observation-actions { margin-block: 10px 6px; }
+.observation-check[data-result="retry"] .feedback {
+  padding: 7px 9px;
+  border-inline-start: 3px solid var(--flow-retry-line);
+  background: var(--flow-retry);
+  color: var(--flow-retry-ink);
+}
+.observation-check[data-result="correct"] .feedback {
+  padding: 7px 9px;
+  border-inline-start: 3px solid var(--flow-success-line);
+  background: var(--flow-success);
+  color: var(--flow-success-ink);
+}
+@media (min-width: 900px) {
+  .observation-grid { grid-template-columns: 1fr 1fr; }
+}

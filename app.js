@@ -172,6 +172,20 @@ function escape(value = '') {
   })[char]);
 }
 
+function latestTransferStatus(id) {
+  const saved = state.activities?.[id];
+  const task = typeof bioObservationChecks !== 'undefined' && bioObservationChecks[id]?.review;
+  if (!task) return saved?.transferStatus;
+  const attempt = saved?.transferEvidence;
+  if (attempt?.task !== task.id) {
+    return state.viewed?.[id] || Object.hasOwn(state.reviewed ?? {}, id) ? 'pending' : null;
+  }
+  if (attempt.phase === 'done' && attempt.outcome === 'correct') {
+    return attempt.usedHelp ? 'supported' : 'independent';
+  }
+  return attempt.hadError ? 'retry' : 'pending';
+}
+
 function updateDirectory() {
   const transferLabels = {
     independent: '新材料独立答对',
@@ -184,7 +198,7 @@ function updateDirectory() {
     const draft = state.projects?.[id]?.draft ?? state.activities?.[id]?.draft;
     const hasDraft = draft && Object.values(draft).some(value => Array.isArray(value) ? value.length > 0 :
       typeof value === 'string' ? Boolean(value.trim()) : Boolean(value));
-    const transfer = state.activities?.[id]?.transferStatus;
+    const transfer = latestTransferStatus(id);
     const learning = Object.hasOwn(transferLabels, transfer) ? transferLabels[transfer]
       : state.reviewed?.[id] === true ? '旧复习已答对 · 首答未记录'
       : state.reviewed?.[id] === false ? '新材料待重试'
@@ -627,7 +641,7 @@ function setupLessonReview(entry, restorePosition) {
   }
 
   function scrollToReview() {
-    const target = review.closest('.flow-pane')?.querySelector('[data-review-content] h2, [data-quiz="transfer"] legend') || summary;
+    const target = review.closest('.flow-pane')?.querySelector('[data-observation-check="review"] h2, [data-review-content]:not([hidden]) h2, [data-quiz="transfer"]:not([hidden]) legend') || summary;
     target.tabIndex = -1;
     target.scrollIntoView({ block: 'start', behavior: 'instant' });
     target.focus({ preventScroll: true });
