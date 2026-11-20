@@ -186,11 +186,15 @@ function mountLessonFlow(entry, resumeReview) {
   function syncForward(phase) {
     if (!phase.forward) return;
     const tasks = Array.from(phase.pane.querySelectorAll(taskSelector));
+    const retry = tasks.find(task => task.dataset.taskOutcome === 'retry');
     const ready = tasks.every(task => task.dataset.taskOutcome === 'correct');
     const canContinue = tasks.every(task => task.dataset.taskOutcome === 'correct' ||
       task.dataset.taskOutcome === 'retry' && task.dataset.flowModeled === 'true');
     phase.forward.hidden = !canContinue;
     phase.forward.classList.toggle('action', ready && !(phase.id === 'start' && practice && observePhase));
+    phase.forward.textContent = retry && canContinue ? '先跳过，留作复习 →' : phase.forwardLabel;
+    if (phase.retry) phase.retry.hidden = !retry ||
+      Boolean(retry.querySelector('[data-cell-find-evidence].action:not([hidden])'));
     if (tasks.length) {
       phase.pane.dataset.flowOutcome = ready ? 'correct'
         : tasks.some(task => task.dataset.taskOutcome === 'retry') ? 'retry' : 'ready';
@@ -267,6 +271,21 @@ function mountLessonFlow(entry, resumeReview) {
       phase.forward = forward;
     }
     const previous = phases[index - 1];
+    if (pane.querySelector(taskSelector) && phase.forward) {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'action';
+      retry.textContent = '按线索再试';
+      retry.hidden = true;
+      retry.addEventListener('click', () => {
+        const question = pane.querySelector('[data-task-outcome="retry"]');
+        const target = question?.querySelector('[data-answer], [data-review-option]');
+        target?.focus();
+      });
+      phase.retry = retry;
+      actions.prepend(retry);
+    }
+    if (phase.forward) phase.forwardLabel = phase.forward.textContent;
     if (previous) {
       const back = document.createElement('button');
       back.type = 'button';

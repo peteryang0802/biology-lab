@@ -29,6 +29,8 @@ function mountTermReview(entry, record) {
   let attemptId = current?.id || (validRun ? saved.id : makeId());
   let assisted = Boolean(current?.assisted || (validRun && saved.assisted));
   let firstChoice = Number.isInteger(current?.firstChoice) ? current.firstChoice : current?.choice;
+  const seen = () => history.some(item => item.id !== attemptId && item.variant === variant)
+    || Boolean(legacy && variant === legacy.variant && !current?.id);
 
   function rememberRun() {
     saveActivityField(entry.id, 'reviewRun', { id: attemptId, variant, assisted });
@@ -79,7 +81,9 @@ function mountTermReview(entry, record) {
       content.dataset.result = correct ? 'correct' : 'retry';
       const outcome = !correct || !Number.isInteger(attempt?.firstChoice) ? ''
         : attempt.assisted ? ' 参考材料或提示后答对。'
-          : attempt.firstChoice === index ? ' 首次答对。' : ' 反馈后改对。';
+          : seen() ? ' 再练后答对。'
+          : attempt.independent ? ' 新材料首次独立答对。'
+            : attempt.firstChoice === index ? ' 已核对正确。' : ' 反馈后改对。';
       feedback.textContent = (correct ? '答对了。' : '还需对照。') + activity.options[index][1].replace(/^对。/, '') + outcome;
       options.forEach((option, i) => option.setAttribute('aria-pressed', String(i === index)));
       updateActions(correct ? 'correct' : 'retry');
@@ -87,14 +91,16 @@ function mountTermReview(entry, record) {
     if (answered?.variant === variant) showAnswer(answered.choice, answered);
     else updateActions('ready');
     options.forEach((button, index) => button.addEventListener('click', () => {
+      const independent = index === activity.answer && !assisted && !seen() && (!Number.isInteger(firstChoice)
+        || state.activities?.[entry.id]?.transferStatus === 'independent' && firstChoice === index);
       firstChoice ??= index;
-      const attempt = {id: attemptId, at: Date.now(), variant, choice: index, firstChoice, assisted};
+      const attempt = {id: attemptId, at: Date.now(), variant, choice: index, firstChoice, assisted, independent};
       showAnswer(index, attempt);
       const known = history.findIndex(item => item.id === attemptId);
       if (known >= 0) history.splice(known, 1);
       history.push(attempt);
       saveActivityField(entry.id, 'reviewHistory', history.slice(-12));
-      markReviewAttempt(entry, index === activity.answer);
+      markReviewAttempt(entry, index === activity.answer, independent);
       keepActivityFeedbackVisible(button, feedback);
     }));
     hintButton.addEventListener('click', event => {
@@ -110,6 +116,7 @@ function mountTermReview(entry, record) {
       assisted = false;
       firstChoice = undefined;
       rememberRun();
+      saveActivityField(entry.id, 'transferStatus', 'pending');
       showAttempt();
       const prompt = content.querySelector('h2');
       prompt.focus({preventScroll: true});

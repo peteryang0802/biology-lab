@@ -173,14 +173,23 @@ function escape(value = '') {
 }
 
 function updateDirectory() {
+  const transferLabels = {
+    independent: '新材料独立答对',
+    supported: '提示或重试后答对',
+    retry: '新材料待重试',
+    pending: '新材料待核对',
+  };
   for (const link of document.querySelectorAll('a[data-entry-id]')) {
     const id = link.dataset.entryId;
     const draft = state.projects?.[id]?.draft ?? state.activities?.[id]?.draft;
     const hasDraft = draft && Object.values(draft).some(value => Array.isArray(value) ? value.length > 0 :
       typeof value === 'string' ? Boolean(value.trim()) : Boolean(value));
-    const learning = state.reviewed?.[id] === true ? '复习答对' : state.reviewed?.[id] === false ? '复习试过' :
-      state.practiced?.[id] ? '做过练习' : state.checked?.[id] ? '已核对记录' :
-      state.viewed?.[id] || state[id] ? '看过' : '';
+    const transfer = state.activities?.[id]?.transferStatus;
+    const learning = Object.hasOwn(transferLabels, transfer) ? transferLabels[transfer]
+      : state.reviewed?.[id] === true ? '旧复习已答对 · 首答未记录'
+      : state.reviewed?.[id] === false ? '新材料待重试'
+      : state.checked?.[id] || state.practiced?.[id] ? '做过课内练习 · 新材料待核对'
+      : state.viewed?.[id] || state[id] ? '看过 · 新材料待核对' : '';
     link.querySelector('.directory-status').textContent = [learning, hasDraft ? '有草稿' : ''].filter(Boolean).join(' · ');
   }
 }
@@ -213,14 +222,13 @@ function markPracticed(entry) {
   }
 }
 
-function markReviewAttempt(entry, correct) {
+function markReviewAttempt(entry, correct, independent) {
   const note = outlet.querySelector('[data-review-note]');
   if (note && correct) note.hidden = false;
   const reviewed = state.reviewed ?? {};
   const outcome = reviewed[entry.id] === true || correct === true;
-  if (reviewed[entry.id] === outcome) return;
   state.reviewed = { ...reviewed, [entry.id]: outcome };
-  saveState();
+  saveActivityField(entry.id, 'transferStatus', !correct ? 'retry' : independent ? 'independent' : 'supported');
 }
 
 function showQuizOutcome(quiz, outcome) {
@@ -698,6 +706,7 @@ function mountLearningAdditions(entry) {
         evidenceButton.classList.toggle('text-control', !needsPhoto);
       }
       if (checkButton) checkButton.hidden = outcome === 'correct';
+      checkButton?.classList.toggle('action', outcome === 'ready');
       example.hidden = outcome !== 'retry' || needsPhoto;
       showQuizOutcome(section, outcome);
     }
@@ -756,8 +765,14 @@ function mountLearningAdditions(entry) {
       const review = state.reviews?.[entry.id];
       const firstCheck = review?.[firstCheckKey] ?? (remember ? correct : undefined);
       const consulted = Boolean(review?.[remember ? consultationKey : checkedConsultationKey]);
+      const independent = !consulted && firstCheck === true && (
+        state.activities?.[entry.id]?.transferStatus === 'independent' ||
+        remember && !Object.hasOwn(state.reviewed ?? {}, entry.id)
+      );
       feedback.textContent = result + explanation + (correct && typeof firstCheck === 'boolean'
-        ? consulted ? ' 回看材料后核对正确。' : firstCheck ? ' 首次核对正确。' : ' 反馈后改对。'
+        ? consulted ? ' 回看材料后核对正确。'
+          : name === 'transfer' ? independent ? ' 新材料首次独立答对。' : ' 已核对正确。'
+          : firstCheck ? ' 首次核对正确。' : ' 反馈后改对。'
         : '');
       if (evidenceButton) {
         evidenceButton.textContent = ['回看照片比例 ↑', '在照片中找绿点 ↑', '对照细胞结构示意 ↑'][option];
@@ -766,7 +781,7 @@ function mountLearningAdditions(entry) {
       if (!remember) return;
       rememberReview({ [checkedKey]: true, [firstCheckKey]: firstCheck, [checkedConsultationKey]: consulted });
       if (name === 'transfer') {
-        markReviewAttempt(entry, correct);
+        markReviewAttempt(entry, correct, independent);
       } else {
         state.checked = { ...state.checked, [entry.id]: true };
         if (correct && hasPhotoEvidence) markPracticed(entry);
