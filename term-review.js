@@ -13,15 +13,19 @@ function mountTermReview(entry, record) {
   const content = root.querySelector('[data-review-content]');
   const variants = {base: entry.review};
   if (entry.review.alternate) variants.alternate = entry.review.alternate;
+  const focused = globalThis.bioLessonPractice?.[entry.id]?.transfer;
+  if (focused) variants.focus = focused;
+  const activeVariants = focused ? ['focus'] : Object.keys(variants);
   const history = Array.isArray(record.reviewHistory) ? record.reviewHistory.filter(item =>
     plainRecord(item) && Object.hasOwn(variants, item.variant) &&
     Number.isInteger(item.choice) && Boolean(variants[item.variant].options[item.choice])) : [];
   const makeId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
   const saved = record.reviewRun;
-  const validRun = plainRecord(saved) && Object.hasOwn(variants, saved.variant) && typeof saved.id === 'string';
-  const legacy = Number.isInteger(record.review) && variants.base.options[record.review] ? { variant: 'base', choice: record.review } : null;
-  const current = validRun ? history.find(attempt => attempt.id === saved.id && attempt.variant === saved.variant) : history.at(-1) || legacy;
-  let variant = validRun ? saved.variant : current?.variant || 'base';
+  const validRun = plainRecord(saved) && activeVariants.includes(saved.variant) && typeof saved.id === 'string';
+  const legacy = !focused && Number.isInteger(record.review) && variants.base.options[record.review] ? { variant: 'base', choice: record.review } : null;
+  const current = validRun ? history.find(attempt => attempt.id === saved.id && attempt.variant === saved.variant)
+    : history.filter(attempt => activeVariants.includes(attempt.variant)).at(-1) || legacy;
+  let variant = validRun ? saved.variant : current?.variant || activeVariants[0];
   let attemptId = current?.id || (validRun ? saved.id : makeId());
   let assisted = Boolean(current?.assisted || (validRun && saved.assisted));
   let firstChoice = Number.isInteger(current?.firstChoice) ? current.firstChoice : current?.choice;
@@ -34,6 +38,7 @@ function mountTermReview(entry, record) {
     const activity = variants[variant];
     const previous = history.filter(attempt => attempt.id !== attemptId).at(-1);
     delete content.dataset.result;
+    delete content.dataset.flowModeled;
     content.innerHTML = `<h2 tabindex="-1">${escape(activity.prompt)}</h2>
       <div class="choice-row" role="group" aria-label="选择自己的判断">
         ${activity.options.map(([label], index) => `<button type="button" class="choice" data-review-option="${index}" aria-pressed="false">${escape(label)}</button>`).join('')}
@@ -41,9 +46,10 @@ function mountTermReview(entry, record) {
       <p class="activity-feedback" role="status"></p>
       <button type="button" class="text-control" data-review-evidence hidden>先看线索</button>
       <button type="button" class="text-control" data-review-hint hidden>给一点提示</button>
+      ${renderWorkedExample(activity.options[activity.answer][1].replace(/^对。/, ''))}
       <details class="flow-extras" data-review-options hidden>
         <summary>想再练一次</summary>
-        <button type="button" class="text-control review-again" data-review-again>${variants.alternate ? '换份材料再试' : '重做这道题'}</button>
+        <button type="button" class="text-control review-again" data-review-again>${activeVariants.length > 1 ? '换份材料再试' : '重做这道题'}</button>
       ${previous ? `<details class="review-history"><summary>看上次的答法</summary>
         <p>${escape(variants[previous.variant].prompt)}</p>
         <p>上次选了「${escape(variants[previous.variant].options[previous.choice][0])}」。${escape(variants[previous.variant].options[previous.choice][1])}</p>
@@ -54,6 +60,7 @@ function mountTermReview(entry, record) {
     const more = content.querySelector('[data-review-options]');
     const sourceButton = content.querySelector('[data-review-evidence]');
     const hintButton = content.querySelector('[data-review-hint]');
+    const example = content.querySelector('[data-flow-example]');
     const hasSource = typeof bindReviewEvidence === 'function' && bindReviewEvidence(entry, sourceButton, () => {
       assisted = true;
       rememberRun();
@@ -62,6 +69,7 @@ function mountTermReview(entry, record) {
     function updateActions(outcome) {
       sourceButton.hidden = !hasSource || outcome === 'correct';
       hintButton.hidden = hasSource || outcome === 'correct';
+      example.hidden = outcome !== 'retry';
       more.hidden = outcome !== 'correct';
       showQuizOutcome(content, outcome);
     }
@@ -97,7 +105,7 @@ function mountTermReview(entry, record) {
       keepActivityFeedbackVisible(event.currentTarget, feedback);
     });
     again.addEventListener('click', () => {
-      if (variants.alternate) variant = variant === 'base' ? 'alternate' : 'base';
+      if (activeVariants.length > 1) variant = variant === 'base' ? 'alternate' : 'base';
       attemptId = makeId();
       assisted = false;
       firstChoice = undefined;

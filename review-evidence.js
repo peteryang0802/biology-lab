@@ -75,6 +75,8 @@ const transferEvidence = {
 };
 
 function textReviewMaterials(entry, question, target) {
+  const focused = globalThis.bioLessonPractice?.[entry.id]?.transfer;
+  if (focused?.material?.length && (!question || question === 'transfer')) return focused.material;
   const lesson = globalThis.bioUnitOne?.[entry.id];
   if (entry.id === 'life-traits') {
     const stage = lesson?.stages?.[0];

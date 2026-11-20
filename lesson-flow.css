@@ -76,6 +76,23 @@
 }
 .lesson-flow .flow-opening { max-width: 42rem; }
 .lesson-flow .flow-opening > h2 { color: var(--flow-reflection-ink); }
+.lesson-flow .flow-opening-instruction {
+  margin-block: 8px 12px;
+  color: var(--muted);
+}
+.lesson-flow .flow-predictions {
+  display: grid;
+  gap: 8px;
+}
+.lesson-flow .flow-predictions button { text-align: start; }
+.lesson-flow .flow-first-thought {
+  margin: 0 0 12px;
+  padding: 7px 10px;
+  border-inline-start: 2px solid var(--flow-reflection-line);
+  background: var(--flow-reflection);
+  color: var(--flow-reflection-ink);
+  font-size: .94rem;
+}
 .lesson-flow .flow-questions {
   margin: 8px 0 0;
   padding: 0 0 0 1.65em;
@@ -202,6 +219,27 @@
   background: var(--flow-reflection);
   color: var(--flow-reflection-ink);
 }
+.lesson-flow .flow-method { margin-block-start: 8px; }
+.lesson-flow .flow-worked-example {
+  width: fit-content;
+  max-width: 100%;
+  margin: 4px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.lesson-flow .flow-worked-example > summary {
+  min-height: 44px;
+  padding-block: 8px;
+  color: var(--flow-material-ink);
+  font-size: .88rem;
+}
+.lesson-flow .flow-worked-example p {
+  padding: 6px 10px;
+  border-inline-start: 2px solid var(--flow-material-line);
+  background: var(--flow-material);
+  color: var(--flow-material-ink);
+}
 .lesson-flow .flow-pane .review-note { margin-top: 12px; }
 .lesson-flow .flow-pane > .intro-copy { margin: 0 0 10px; }
 .lesson-flow .flow-extras[open] > .flow-questions {
@@ -267,7 +305,7 @@
   text-decoration: none;
 }
 .lesson-flow .flow-actions a.action:hover { text-decoration: underline; }
-.lesson-flow .flow-actions button[data-flow-back] {
+.lesson-flow .flow-actions :is([data-flow-back], .flow-forward:not(.action)) {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -279,7 +317,7 @@
   text-decoration: underline;
   text-underline-offset: .19em;
 }
-.lesson-flow .flow-actions button[data-flow-back]:hover { color: var(--ink); }
+.lesson-flow .flow-actions :is([data-flow-back], .flow-forward:not(.action)):hover { color: var(--ink); }
 .lesson-flow .flow-pane:has(.action:not(.flow-forward, :disabled, [hidden], [hidden] *, details:not([open]) *)) > .flow-actions [data-flow-next] {
   border-color: var(--flow-rule);
   background: transparent;

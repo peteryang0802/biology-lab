@@ -484,6 +484,23 @@ function renderDiagramLesson(entry, data) {
   mountLearningAdditions(entry);
 }
 
+function renderWorkedExample(text) {
+  return `<details class="flow-worked-example" data-flow-example hidden><summary>看一次示范</summary>
+    <p>${escape(text)}</p><p>可以照这个顺序想，再选一次。</p></details>`;
+}
+
+function lessonQuiz(entry, name) {
+  const focused = name === 'transfer' && globalThis.bioLessonPractice?.[entry.id]?.transfer;
+  if (!focused) return globalThis.bioRevisions?.[entry.id]?.[name];
+  return {
+    question: focused.prompt,
+    options: focused.options.map(([label]) => label),
+    correct: [focused.answer],
+    feedbackByOption: focused.options.map(([, feedback]) => feedback),
+    explain: focused.options[focused.answer][1],
+  };
+}
+
 function renderQuiz(name, activity, photoStation = false) {
   const title = name === 'evidence' ? '从材料里找线索' : '换个例子再试';
   const multiple = activity.correct.length > 1;
@@ -501,6 +518,7 @@ function renderQuiz(name, activity, photoStation = false) {
     ${photoStation ? '<button type="button" class="text-control" data-cell-find-evidence hidden></button>' : ''}
     <button type="button" class="text-control" data-review-evidence hidden>先看线索</button>
     <button type="button" class="text-control" data-quiz-hint hidden>给一点提示</button>
+    ${renderWorkedExample(activity.explain)}
   </section>`;
 }
 
@@ -625,13 +643,14 @@ function setupLessonReview(entry, restorePosition) {
 function renderLearningAdditions(entry, summary = '', outside = '') {
   const data = globalThis.bioRevisions?.[entry.id];
   if (!data) return summary ? `<section class="reflection"><h2>学到了什么</h2><p>${escape(summary)}</p></section>` : '';
+  const transfer = lessonQuiz(entry, 'transfer');
   return `<section class="learning-zone">
     <section class="concept-summary"><h2>用一句话连回课本</h2>
       <p>${escape(data.concept || summary)}</p>
     </section>
     ${data.evidence ? renderQuiz('evidence', data.evidence, entry.id === 'cell') : ''}
     ${renderEvidenceChallenge(entry)}
-    ${data.transfer ? `<details class="more-activity transfer-practice" id="lesson-review"><summary>换份材料复习</summary>${renderQuiz('transfer', data.transfer)}${renderReviewNote(entry)}</details>` : ''}
+    ${transfer ? `<details class="more-activity transfer-practice" id="lesson-review"><summary>换份材料复习</summary>${renderQuiz('transfer', transfer)}${renderReviewNote(entry)}</details>` : ''}
     ${outside ? `<p class="outside">${escape(outside)}</p>` : ''}
   </section>`;
 }
@@ -643,17 +662,19 @@ function mountLearningAdditions(entry) {
   for (const name of ['evidence', 'transfer']) {
     const section = outlet.querySelector(`[data-quiz="${name}"]`);
     if (!section) continue;
-    const activity = data[name];
+    const activity = lessonQuiz(entry, name);
     const options = [...section.querySelectorAll('[data-answer]')];
     const feedback = section.querySelector('.feedback');
     const checkButton = section.querySelector('[data-check]');
     const evidenceButton = section.querySelector('[data-cell-find-evidence]');
     const sourceButton = section.querySelector('[data-review-evidence]');
     const hintButton = section.querySelector('[data-quiz-hint]');
-    const checkedKey = name + 'Checked';
-    const consultationKey = name + 'Consulted';
-    const checkedConsultationKey = name + 'ConsultedWhenChecked';
-    const firstCheckKey = name + 'FirstCorrect';
+    const example = section.querySelector('[data-flow-example]');
+    const answerKey = name === 'transfer' && globalThis.bioLessonPractice?.[entry.id]?.transfer ? 'focusedTransfer' : name;
+    const checkedKey = answerKey + 'Checked';
+    const consultationKey = answerKey + 'Consulted';
+    const checkedConsultationKey = answerKey + 'ConsultedWhenChecked';
+    const firstCheckKey = answerKey + 'FirstCorrect';
     function rememberReview(fields) {
       const record = { ...state.reviews?.[entry.id], ...fields };
       state.reviews = { ...state.reviews, [entry.id]: record };
@@ -661,7 +682,7 @@ function mountLearningAdditions(entry) {
     }
     const hasSource = typeof bindReviewEvidence === 'function' &&
       bindReviewEvidence(entry, sourceButton, () => rememberReview({ [consultationKey]: true }));
-    const previous = state.reviews?.[entry.id]?.[name];
+    const previous = state.reviews?.[entry.id]?.[answerKey];
     const chosen = new Set(Array.isArray(previous) ? previous.filter(value => options.some(option => option.dataset.answer === value)) : []);
 
     function updateChoices() {
@@ -678,6 +699,7 @@ function mountLearningAdditions(entry) {
         evidenceButton.classList.toggle('text-control', !needsPhoto);
       }
       if (checkButton) checkButton.hidden = outcome === 'correct';
+      example.hidden = outcome !== 'retry' || needsPhoto;
       showQuizOutcome(section, outcome);
     }
 
@@ -700,7 +722,7 @@ function mountLearningAdditions(entry) {
       }
       updateChoices();
       rememberReview({
-        [name]: [...chosen], [checkedKey]: false,
+        [answerKey]: [...chosen], [checkedKey]: false,
         ...(evidenceButton ? { cellEvidenceChecked: false } : {}),
       });
       if (!checkButton) {

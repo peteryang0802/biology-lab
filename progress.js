@@ -28,7 +28,7 @@ function combineReviewHistory(...lists) {
     if (!Array.isArray(list)) continue;
     for (const attempt of list) {
       if (typeof attempt?.id !== 'string' || !Number.isFinite(attempt.at) ||
-          !['base', 'alternate'].includes(attempt.variant) || !Number.isInteger(attempt.choice)) continue;
+          !['base', 'alternate', 'focus'].includes(attempt.variant) || !Number.isInteger(attempt.choice)) continue;
       if (!attempts.has(attempt.id) || attempts.get(attempt.id).at <= attempt.at) attempts.set(attempt.id, attempt);
     }
   }

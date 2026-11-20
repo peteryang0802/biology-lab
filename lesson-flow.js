@@ -94,6 +94,7 @@ function mountLessonFlow(entry, resumeReview) {
   const stages = buildLessonPanes(outlet, entry);
   if (!stages) return null;
   const { intro, phases, review } = stages;
+  const practice = globalThis.bioLessonPractice?.[entry.id];
   const questionList = document.createElement('ol');
   questionList.className = 'flow-questions';
   for (const question of questions) {
@@ -103,11 +104,35 @@ function mountLessonFlow(entry, resumeReview) {
   }
   const opening = document.createElement('div');
   opening.className = 'flow-opening';
-  opening.innerHTML = '<h2>带着这两个问题学</h2>';
-  opening.append(questionList);
   const reviewPhase = phases.find(phase => phase.id === 'review');
-  reviewPhase?.content.unshift(flowDisclosure('回看开场两问', [questionList.cloneNode(true)]));
-  phases.unshift({ id: 'start', label: '先看问题', content: [opening] });
+  const observePhase = phases.find(phase => phase.id === 'observe');
+  const firstThought = document.createElement('p');
+  firstThought.className = 'flow-first-thought';
+  firstThought.hidden = true;
+  if (practice && observePhase) {
+    opening.innerHTML = `<h2 id="flow-opening-question">${escape(practice.prompt || questions[0])}</h2>
+      <p class="flow-opening-instruction">先选一个想法，接着用材料核对。</p>
+      <div class="flow-predictions" role="group" aria-labelledby="flow-opening-question">
+        ${practice.choices.map((choice, index) => `<button type="button" data-flow-predict="${index}" aria-pressed="false">${escape(choice)}</button>`).join('')}
+      </div>`;
+    observePhase.label = practice.observe;
+    observePhase.action = '先看材料';
+    observePhase.content.unshift(firstThought);
+    if (reviewPhase) {
+      reviewPhase.label = '用新材料试一次';
+      const summary = reviewPhase.content.find(node => node.matches('.concept-summary'));
+      const method = document.createElement('p');
+      method.className = 'flow-method';
+      method.innerHTML = `<strong>下次可以这样做</strong> ${escape(practice.method)}`;
+      if (summary) summary.append(method);
+      else reviewPhase.content.unshift(method);
+    }
+  } else {
+    opening.innerHTML = '<h2>带着这两个问题学</h2>';
+    opening.append(questionList);
+  }
+  reviewPhase?.content.push(flowDisclosure('回看开场两问', [questionList.cloneNode(true)]));
+  phases.unshift({ id: 'start', label: practice ? '先试一个想法' : '先看问题', content: [opening] });
 
   const frame = document.createElement('div');
   frame.className = 'lesson-flow';
@@ -162,12 +187,31 @@ function mountLessonFlow(entry, resumeReview) {
     if (!phase.forward) return;
     const tasks = Array.from(phase.pane.querySelectorAll(taskSelector));
     const ready = tasks.every(task => task.dataset.taskOutcome === 'correct');
-    phase.forward.hidden = !ready;
+    const canContinue = tasks.every(task => task.dataset.taskOutcome === 'correct' ||
+      task.dataset.taskOutcome === 'retry' && task.dataset.flowModeled === 'true');
+    phase.forward.hidden = !canContinue;
+    phase.forward.classList.toggle('action', ready && !(phase.id === 'start' && practice && observePhase));
     if (tasks.length) {
-      phase.forward.className = ready ? 'action flow-forward' : 'flow-forward';
       phase.pane.dataset.flowOutcome = ready ? 'correct'
         : tasks.some(task => task.dataset.taskOutcome === 'retry') ? 'retry' : 'ready';
     }
+  }
+
+  const predictions = [...opening.querySelectorAll('[data-flow-predict]')];
+  function showFirstThought(index) {
+    const choice = practice?.choices[index];
+    for (const button of predictions) button.setAttribute('aria-pressed', String(Number(button.dataset.flowPredict) === index));
+    firstThought.hidden = !choice;
+    firstThought.textContent = choice ? `刚才你选了「${choice}」。看看材料能不能支持这个想法。` : '';
+  }
+  showFirstThought(state.activities?.[entry.id]?.openingChoice);
+  for (const button of predictions) {
+    button.addEventListener('click', () => {
+      const index = Number(button.dataset.flowPredict);
+      saveActivityField(entry.id, 'openingChoice', index);
+      showFirstThought(index);
+      stepTo(observePhase);
+    });
   }
   function stepTo(phase, { focus = true, remember = true, temporary = false } = {}) {
     if (!phase) return;
@@ -265,6 +309,15 @@ function mountLessonFlow(entry, resumeReview) {
     event.target.dataset.taskOutcome = outcome;
     syncForward(phase);
   });
+  frame.addEventListener('toggle', event => {
+    const example = event.target;
+    if (!example.matches('[data-flow-example]') || example.hidden || !example.open) return;
+    const task = example.closest(taskSelector);
+    if (!task) return;
+    task.dataset.flowModeled = 'true';
+    const phase = phases.find(item => item.pane.contains(task));
+    if (phase) syncForward(phase);
+  }, true);
 
   const saved = state.activities?.[entry.id]?.flowStage;
   const restored = phases.find(phase => phase.id === saved);
