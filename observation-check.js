@@ -5,7 +5,8 @@ function biologyObservationCheck(entry, stage, task) {
   const old = state.activities?.[entry.id]?.[key];
   const saved = old?.task === task.id ? old : {};
   let picks = Array.isArray(saved.picks) ? [...new Set(saved.picks.filter(i => Number.isInteger(i) && task.choices[i]))] : [];
-  let record = Number.isInteger(saved.record) && task.records[saved.record] ? saved.record : null;
+  const savedEvidence = Array.isArray(saved.evidence) ? saved.evidence : [saved.record];
+  let evidence = [...new Set(savedEvidence.filter(index => Number.isInteger(index) && task.records[index]))];
   let phase = ['choose', 'cite', 'done'].includes(saved.phase) ? saved.phase : 'choose';
   let outcome = ['ready', 'retry', 'correct'].includes(saved.outcome) ? saved.outcome : 'ready';
   let usedHelp = saved.usedHelp === true;
@@ -26,7 +27,7 @@ function biologyObservationCheck(entry, stage, task) {
         <div class="observation-options">
           ${task.choices.map((text, index) => `<button type="button" data-observation-pick="${index}" aria-pressed="false">${escape(text)}</button>`).join('')}
         </div>
-        <p data-observation-order>${ordering ? '按能量流向点卡片。再点已选卡片，可撤下它。' : ''}</p>
+        <p data-observation-order></p>
       </fieldset>
     </div>
     <div class="observation-controls">
@@ -42,18 +43,19 @@ function biologyObservationCheck(entry, stage, task) {
   const help = by('[data-observation-hint]');
   const result = by('.feedback');
   const answer = task.order || (Array.isArray(task.answer) ? task.answer : [task.answer]);
-  const expected = task.evidence;
+  const expected = Array.isArray(task.evidence) ? task.evidence : Number.isInteger(task.evidence) ? [task.evidence] : [];
   const correctPicks = () => picks.length === count && (ordering
     ? answer.every((index, position) => picks[position] === index)
     : answer.every(index => picks.includes(index)));
-  const evidenceRequired = Number.isInteger(expected);
+  const evidenceRequired = expected.length > 0;
+  const correctEvidence = () => evidence.length === expected.length && expected.every(index => evidence.includes(index));
   if ((phase === 'cite' || phase === 'done') && !correctPicks() ||
-      phase === 'done' && evidenceRequired && record !== expected) {
+      phase === 'done' && evidenceRequired && !correctEvidence()) {
     phase = 'choose';
     outcome = 'ready';
   }
   function save() {
-    saveActivityField(entry.id, key, {task: task.id, picks, record, phase, outcome, usedHelp, hadError, feedback: result.textContent});
+    saveActivityField(entry.id, key, {task: task.id, picks, evidence, phase, outcome, usedHelp, hadError, feedback: result.textContent});
   }
   function draw() {
     const cite = phase === 'cite' && evidenceRequired;
@@ -61,8 +63,9 @@ function biologyObservationCheck(entry, stage, task) {
     html.dataset.result = outcome;
     by('.observation-options').hidden = phase !== 'choose';
     by('[data-observation-order]').textContent = ordering
-      ? picks.length ? '我连的方向　' + picks.map(index => task.choices[index]).join(' → ') +
-        (phase === 'choose' ? '（再点已选卡片可撤下）' : '') : '按能量流向点卡片。'
+      ? picks.length ? '我的顺序　' + picks.map(index => task.choices[index]).join(' → ') +
+        (phase === 'choose' ? '（再点已选卡片可撤下）' : '')
+        : task.orderInstruction || '按能量流向点卡片。'
       : picks.length ? '我的判断　' + picks.map(index => task.choices[index]).join('、') : '';
     for (const [index, button] of pickButtons.entries()) {
       button.setAttribute('aria-pressed', String(picks.includes(index)));
@@ -71,16 +74,16 @@ function biologyObservationCheck(entry, stage, task) {
     for (const [index, button] of recordButtons.entries()) {
       button.hidden = !cite;
       button.previousElementSibling.hidden = cite;
-      button.setAttribute('aria-pressed', String(index === record));
-      button.parentElement.toggleAttribute('data-evidence-found', phase === 'done' && index === record);
+      button.setAttribute('aria-pressed', String(evidence.includes(index)));
+      button.parentElement.toggleAttribute('data-evidence-found', phase === 'done' && evidence.includes(index));
     }
     by('.observation-records legend').textContent = cite
-      ? task.why || '哪一条记录能支持你的判断？'
+      ? task.why || `选出 ${expected.length} 条支持判断的记录`
       : task.source || '观察记录';
     check.hidden = phase === 'done' || outcome === 'retry';
-    check.disabled = cite ? record === null : picks.length !== count;
+    check.disabled = cite ? evidence.length !== expected.length : picks.length !== count;
     check.className = outcome === 'retry' ? '' : 'action';
-    check.textContent = cite ? '核对证据' : ordering ? '核对连接' : '核对判断';
+    check.textContent = cite ? '核对证据' : ordering ? task.orderInstruction ? '核对顺序' : '核对连接' : '核对判断';
     help.hidden = phase === 'done';
     showQuizOutcome(html, outcome);
   }
@@ -97,7 +100,9 @@ function biologyObservationCheck(entry, stage, task) {
     edit();
   }));
   recordButtons.forEach((button, index) => button.addEventListener('click', () => {
-    record = index;
+    if (evidence.includes(index)) evidence = evidence.filter(item => item !== index);
+    else if (expected.length === 1) evidence = [index];
+    else if (evidence.length < expected.length) evidence = [...evidence, index];
     edit();
   }));
   function complete() {
@@ -111,13 +116,13 @@ function biologyObservationCheck(entry, stage, task) {
   check.addEventListener('click', () => {
     if (phase === 'choose' && correctPicks() && evidenceRequired) {
       phase = 'cite';
-      result.textContent = '判断已经选好。再指出一条能支持它的记录。';
+      result.textContent = `判断已经选好。再找出 ${expected.length} 条支持它的记录。`;
       draw();
       save();
       recordButtons[0].focus({ preventScroll: true });
       return;
     }
-    if (phase === 'choose' ? correctPicks() : record === expected) {
+    if (phase === 'choose' ? correctPicks() : correctEvidence()) {
       complete();
     } else {
       usedHelp = true;

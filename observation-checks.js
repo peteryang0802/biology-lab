@@ -46,3 +46,53 @@ const bioObservationChecks = {
     },
   },
 };
+
+function biologyTransferCase(id) {
+  const sample = bioObservationChecks[id]?.review;
+  if (sample) return sample;
+  const lesson = typeof bioNewEvidenceCases !== 'undefined' && bioNewEvidenceCases[id];
+  if (!lesson) return null;
+  const [prompt, records, choices, answer, evidence, hint, result, evidenceHint] = lesson;
+  const n = [...id].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 253, 0);
+  const offset = n % choices.length;
+  return {
+    id: 'new-material-1',
+    prompt, records,
+    source: '新情境 · 模拟记录',
+    choices: choices.slice(offset).concat(choices.slice(0, offset)),
+    answer: (answer - offset + choices.length) % choices.length,
+    evidence, hint, result, evidenceHint,
+  };
+}
+
+function biologyClassroomCase(entry) {
+  if (typeof bioModelEvidenceCases === 'undefined') return null;
+  const model = bioModelEvidenceCases[entry.id];
+  if (model) {
+    const [prompt, evidence, answer, hint] = model;
+    return {
+      id: 'model-evidence-1',
+      prompt,
+      source: '核对本课材料',
+      records: evidence.map((text, index) => `记录 ${index + 1}　${text}`),
+      choices: evidence.map((_, index) => '记录 ' + (index + 1)),
+      answer, hint,
+      result: '对照正确。' + evidence[answer],
+    };
+  }
+  const activity = entry.activity;
+  if (!activity || !['order', 'evidence'].includes(activity.kind)) return null;
+  const rows = activity.kind === 'order' ? activity.tiles : activity.rows;
+  return {
+    id: 'classroom-evidence-1',
+    prompt: activity.prompt,
+    source: '本课的观察记录',
+    instruction: activity.kind === 'order' ? '按记录排一遍' : `选出 ${activity.answer.length} 条支持结论的记录`,
+    records: rows.map(row => row.label + '　' + row.text),
+    choices: rows.map(row => row.label),
+    ...(activity.kind === 'order' ? {order: activity.answer, orderInstruction: '依次点击。再点已选卡片，可以撤下。'}
+      : {answer: activity.answer}),
+    hint: activity.hint,
+    result: activity.result,
+  };
+}

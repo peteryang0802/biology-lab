@@ -109,7 +109,8 @@ function mountLessonFlow(entry, resumeReview) {
   const firstThought = document.createElement('p');
   firstThought.className = 'flow-first-thought';
   firstThought.hidden = true;
-  const checks = typeof bioObservationChecks !== 'undefined' ? bioObservationChecks[entry.id] : null;
+  const sample = typeof bioObservationChecks !== 'undefined' ? bioObservationChecks[entry.id] : null;
+  const transfer = typeof biologyTransferCase === 'function' ? biologyTransferCase(entry.id) : null;
   if (practice && observePhase) {
     opening.innerHTML = `<h2 id="flow-opening-question">${escape(practice.prompt || questions[0])}</h2>
       <p class="flow-opening-instruction">先选一个想法，接着用材料核对。</p>
@@ -132,13 +133,19 @@ function mountLessonFlow(entry, resumeReview) {
     opening.innerHTML = '<h2>带着这两个问题学</h2>';
     opening.append(questionList);
   }
-  if (checks?.observe && observePhase) {
+  if (sample?.observe && observePhase) {
     const previousActivity = observePhase.content.findIndex(node => node.matches('.term-activity'));
     if (previousActivity !== -1) {
-      observePhase.content.splice(previousActivity, 1, biologyObservationCheck(entry, 'observe', checks.observe));
+      observePhase.content.splice(previousActivity, 1, biologyObservationCheck(entry, 'observe', sample.observe));
     }
+  } else if (observePhase && typeof biologyClassroomCase === 'function') {
+    const classroom = biologyClassroomCase(entry);
+    if (classroom) phases.splice(phases.indexOf(observePhase) + 1, 0, {
+      id: 'reason', label: '用材料判断', action: '用材料核对',
+      content: [biologyObservationCheck(entry, 'reason', classroom)],
+    });
   }
-  if (checks?.review && reviewPhase) {
+  if (transfer && reviewPhase) {
     const legacyReview = review?.querySelector('[data-quiz="transfer"], [data-review-content]');
     if (legacyReview) legacyReview.hidden = true;
     const summary = reviewPhase.content.findIndex(node => node.matches('.concept-summary'));
@@ -147,7 +154,7 @@ function mountLessonFlow(entry, resumeReview) {
       wrap.classList.add('flow-after-review');
       reviewPhase.content[summary] = wrap;
     }
-    reviewPhase.content.unshift(biologyObservationCheck(entry, 'review', checks.review));
+    reviewPhase.content.unshift(biologyObservationCheck(entry, 'review', transfer));
     reviewPhase.action = '换份材料自己试';
   }
   reviewPhase?.content.push(flowDisclosure('回看开场两问', [questionList.cloneNode(true)]));
@@ -207,12 +214,8 @@ function mountLessonFlow(entry, resumeReview) {
     const tasks = Array.from(phase.pane.querySelectorAll(taskSelector));
     const retry = tasks.find(task => task.dataset.taskOutcome === 'retry');
     const ready = tasks.every(task => task.dataset.taskOutcome === 'correct');
-    const canContinue = tasks.every(task => task.dataset.taskOutcome === 'correct' ||
-      task.dataset.taskOutcome === 'retry' && (task.dataset.flowModeled === 'true' ||
-        task.hasAttribute('data-observation-check')));
-    phase.forward.hidden = !canContinue;
+    phase.forward.hidden = !ready;
     phase.forward.classList.toggle('action', ready && !(phase.id === 'start' && practice && observePhase));
-    phase.forward.textContent = retry && canContinue ? '先跳过，留作复习 →' : phase.forwardLabel;
     if (phase.retry) phase.retry.hidden = !retry ||
       Boolean(retry.querySelector('[data-cell-find-evidence].action:not([hidden])'));
     const method = phase.pane.querySelector('.flow-after-review');
@@ -307,7 +310,6 @@ function mountLessonFlow(entry, resumeReview) {
       phase.retry = retry;
       actions.prepend(retry);
     }
-    if (phase.forward) phase.forwardLabel = phase.forward.textContent;
     if (previous) {
       const back = document.createElement('button');
       back.type = 'button';
@@ -356,16 +358,6 @@ function mountLessonFlow(entry, resumeReview) {
     event.target.dataset.taskOutcome = outcome;
     syncForward(phase);
   });
-  frame.addEventListener('toggle', event => {
-    const example = event.target;
-    if (!example.matches('[data-flow-example]') || example.hidden || !example.open) return;
-    const task = example.closest(taskSelector);
-    if (!task) return;
-    task.dataset.flowModeled = 'true';
-    const phase = phases.find(item => item.pane.contains(task));
-    if (phase) syncForward(phase);
-  }, true);
-
   const saved = state.activities?.[entry.id]?.flowStage;
   const restored = phases.find(phase => phase.id === saved);
   const previousReview = resumeReview ? reviewPhase : null;

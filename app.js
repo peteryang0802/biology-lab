@@ -174,7 +174,7 @@ function escape(value = '') {
 
 function latestTransferStatus(id) {
   const saved = state.activities?.[id];
-  const task = typeof bioObservationChecks !== 'undefined' && bioObservationChecks[id]?.review;
+  const task = typeof biologyTransferCase === 'function' && biologyTransferCase(id);
   if (!task) return saved?.transferStatus;
   const attempt = saved?.transferEvidence;
   if (attempt?.task !== task.id) {
@@ -866,12 +866,14 @@ function renderHome() {
   const savedTitle = last?.title || state.titles?.[state.last];
   outlet.innerHTML = `<section class="course-hub">
     <header class="hub-intro">
-      <h1 id="lesson-title" tabindex="-1">${lastTerm ? '继续上次的学习' : '选一本生物课本'}</h1>
+      <h1 id="lesson-title" tabindex="-1">${lastTerm ? '继续上次的学习' : '一粒干豆子一动不动，它还活着吗？'}</h1>
     </header>
     ${lastTerm ? `<nav class="lesson-next hub-resume" aria-label="继续学习"><a class="next-lesson" href="${route(state.last)}" data-resume-lesson="${state.last}">
       <span><small>${lastTerm.title}${state.reviewOpen?.[state.last] === true ? ' · 继续复习' : ''}</small><strong data-resume-title>${escape(savedTitle || '回到上次那一课')}</strong></span><span aria-hidden="true">→</span>
-    </a></nav>` : ''}
-    ${lastTerm ? '<h2 class="term-picker-title">按学期找课</h2>' : ''}
+    </a></nav>` : `<nav class="lesson-next hub-resume" aria-label="开始观察"><a class="next-lesson" href="${route('life-traits')}" data-start-lesson>
+      <span><small>七年级上册 · 生物的特征</small><strong>看豆种前后的变化</strong></span><span aria-hidden="true">→</span>
+    </a></nav>`}
+    <h2 class="term-picker-title">按学期找课</h2>
     <div class="term-grid" aria-label="四册课本">
       ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card">
         <span class="term-card-copy"><strong>${term.title}</strong><span>${term.theme} · ${term.count} 项</span></span><span aria-hidden="true">→</span>
