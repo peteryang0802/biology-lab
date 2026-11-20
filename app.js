@@ -72,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=9`;
+    script.src = `./term-${id}.js?v=${id === '8b' ? 10 : 9}`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -477,7 +477,7 @@ function renderDiagramLesson(entry, data) {
   mountLearningAdditions(entry);
 }
 
-function renderQuiz(name, activity) {
+function renderQuiz(name, activity, photoStation = false) {
   const title = name === 'evidence' ? '从材料里找线索' : '换个例子再试';
   return `<section class="quick-check" data-quiz="${name}" aria-labelledby="${name}-title">
     <header class="quiz-head"><h3 id="${name}-title">${title}</h3>
@@ -491,6 +491,7 @@ function renderQuiz(name, activity) {
     </fieldset>
     <button type="button" class="action" data-check>核对线索</button>
     <p class="feedback" role="status"></p>
+    ${photoStation ? '<button type="button" class="text-control" data-cell-find-evidence hidden></button>' : ''}
   </section>`;
 }
 
@@ -612,7 +613,7 @@ function renderLearningAdditions(entry, summary = '', outside = '') {
     <section class="concept-summary"><h2>用一句话连回课本</h2>
       <p>${escape(data.concept || summary)}</p>
     </section>
-    ${data.evidence ? renderQuiz('evidence', data.evidence) : ''}
+    ${data.evidence ? renderQuiz('evidence', data.evidence, entry.id === 'cell') : ''}
     ${renderEvidenceChallenge(entry)}
     ${data.transfer ? `<details class="more-activity transfer-practice" id="lesson-review"><summary>换份材料复习</summary>${renderQuiz('transfer', data.transfer)}${renderReviewNote(entry)}</details>` : ''}
     ${outside ? `<p class="outside">${escape(outside)}</p>` : ''}
@@ -629,6 +630,7 @@ function mountLearningAdditions(entry) {
     const activity = data[name];
     const options = [...section.querySelectorAll('[data-answer]')];
     const feedback = section.querySelector('.feedback');
+    const evidenceButton = section.querySelector('[data-cell-find-evidence]');
     const previous = state.reviews?.[entry.id]?.[name];
     const chosen = new Set(Array.isArray(previous) ? previous.filter(value => options.some(option => option.dataset.answer === value)) : []);
     for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
@@ -645,9 +647,11 @@ function mountLearningAdditions(entry) {
       }
       for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
       feedback.textContent = '';
+      if (evidenceButton) evidenceButton.hidden = true;
       delete section.dataset.result;
       const record = { ...state.reviews?.[entry.id], [name]: [...chosen] };
       if (name === 'transfer') record.transferChecked = false;
+      if (evidenceButton) record.cellEvidenceChecked = false;
       state.reviews = { ...state.reviews, [entry.id]: record };
       saveState();
     }));
@@ -658,14 +662,18 @@ function mountLearningAdditions(entry) {
         return;
       }
       const correct = activity.correct.length === chosen.size && activity.correct.every(i => chosen.has(String(i)));
-      const photoStation = entry.id === 'cell' && name === 'evidence';
-      const photoUnavailable = photoStation && Boolean(outlet.querySelector('[data-photo][data-image-status="failed"]'));
-      const openPlantSample = photoStation && outlet.querySelector('[data-sample=leaf][aria-pressed="true"]');
-      const qualifier = photoUnavailable ? '照片暂不可见，这次先根据题目里的文字记录判断。'
-        : photoStation && !openPlantSample ? '想用照片再核对，可在上方切回伊乐藻。' : '';
+      const option = Number([...chosen][0]);
+      const photoUnavailable = evidenceButton && Boolean(outlet.querySelector('.cell-samples [data-image-status="failed"]'));
+      const hasPhotoEvidence = evidenceButton && state.cell?.observations?.leaf === 1;
+      const qualifier = photoUnavailable ? '照片暂不可见，这次可根据文字记录判断。'
+        : correct && evidenceButton && !hasPhotoEvidence ? '选择和记录相符。试着回图指出绿点。' : '';
       section.dataset.result = correct ? 'correct' : 'retry';
-      const result = correct ? (photoUnavailable ? '选择和文字记录吻合。' : '答对了。') : '还需对照。';
-      feedback.textContent = result + qualifier + activity.explain;
+      const result = correct ? (qualifier || '答对了。') : '还需对照。' + qualifier;
+      feedback.textContent = result + (activity.feedbackByOption?.[option] ?? activity.explain);
+      if (evidenceButton) {
+        evidenceButton.hidden = false;
+        evidenceButton.textContent = ['回看照片比例 ↑', '在照片中找绿点 ↑', '对照细胞结构示意 ↑'][option];
+      }
       if (!remember) return;
       if (name === 'transfer') {
         markReviewAttempt(entry, correct);
@@ -673,12 +681,42 @@ function mountLearningAdditions(entry) {
         state.reviews = { ...state.reviews, [entry.id]: record };
         saveState();
       } else {
+        if (evidenceButton) {
+          const record = { ...state.reviews?.[entry.id], cellEvidenceChecked: true };
+          state.reviews = { ...state.reviews, [entry.id]: record };
+        }
         state.checked = { ...state.checked, [entry.id]: true };
-        if (correct) markPracticed(entry);
+        if (correct && (!evidenceButton || hasPhotoEvidence)) markPracticed(entry);
         saveState();
       }
     }
+    if (evidenceButton) {
+      const back = outlet.querySelector('[data-cell-back-to-quiz]');
+      const model = outlet.querySelector('[data-cell-model]');
+      function focusCellEvidence(target) {
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }
+      evidenceButton.addEventListener('click', () => {
+        back.hidden = false;
+        if (chosen.has('2')) {
+          model.open = true;
+          focusCellEvidence(model.querySelector('summary'));
+        } else if (chosen.has('0')) {
+          focusCellEvidence(outlet.querySelector('[data-cell-scale]'));
+        } else {
+          const leaf = outlet.querySelector('[data-sample="leaf"]');
+          leaf.click();
+          focusCellEvidence(leaf);
+        }
+      });
+      back.addEventListener('click', () => {
+        check(false);
+        focusCellEvidence(evidenceButton);
+      });
+    }
     if (name === 'transfer' && state.reviews?.[entry.id]?.transferChecked) check(false);
+    if (evidenceButton && state.reviews?.[entry.id]?.cellEvidenceChecked) check(false);
     section.querySelector('[data-check]').addEventListener('click', event => {
       check();
       if (typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(event.currentTarget, feedback);

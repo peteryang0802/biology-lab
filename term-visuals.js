@@ -580,10 +580,27 @@ function renderShadeLab() {
         <i class="shade-canopy" aria-hidden="true"></i>
         ${shadeLabels.map((label, index) => `<button class="choice shade-spot" type="button" data-shade-spot="${index}" aria-pressed="false"><span>${'甲乙丙'[index]}</span>${label}</button>`).join('')}
       </div>
-      <div class="shade-records" data-shade-records aria-label="所选测点的模拟记录"></div>
+      <div class="shade-records" id="shade-records" data-shade-records role="group" tabindex="-1" aria-label="所选测点的模拟记录"></div>
     </div>
     <p class="activity-feedback" data-visual-feedback role="status"></p>
-    <button type="button" class="text-control lab-hint" data-shade-hint>还不确定</button>
+    <div class="shade-actions">
+      <button type="button" class="text-control lab-hint" data-shade-hint>还不确定</button>
+      <button type="button" class="action" data-shade-start aria-controls="shade-conclusion" hidden>判断温差能说明什么 →</button>
+      <button type="button" class="text-control" data-shade-return hidden>回到刚才的判断 →</button>
+    </div>
+    <section class="shade-conclusion" id="shade-conclusion" data-shade-conclusion aria-labelledby="shade-conclusion-title" hidden>
+      <h3 id="shade-conclusion-title" tabindex="-1">这组数据能说明什么？</h3>
+      <p>这次模拟测得相差 6 ℃，所以树荫总能让气温降低 6 ℃。</p>
+      <div class="shade-answers" role="group" aria-label="判断上述说法">
+        <button type="button" class="choice" data-shade-answer="true" aria-pressed="false">对</button>
+        <button type="button" class="choice" data-shade-answer="false" aria-pressed="false">不对</button>
+      </div>
+      <p class="activity-feedback" data-shade-explanation role="status"></p>
+      <div class="shade-actions">
+        <button type="button" class="text-control" aria-controls="shade-records" data-shade-evidence hidden>回看甲、乙的读数 ↑</button>
+        <button type="button" class="action" data-shade-transfer aria-controls="lesson-review" hidden>换成植物的记录再试 →</button>
+      </div>
+    </section>
   </section>`;
 }
 
@@ -591,39 +608,103 @@ function mountShadeLab(lab, values, save, complete, legacyItems) {
   const controls = [...lab.querySelectorAll('[data-shade-spot]')];
   const records = lab.querySelector('[data-shade-records]');
   const feedback = lab.querySelector('[data-visual-feedback]');
+  const start = lab.querySelector('[data-shade-start]');
+  const conclusion = lab.querySelector('[data-shade-conclusion]');
+  const title = conclusion.querySelector('h3');
+  const choices = [...conclusion.querySelectorAll('[data-shade-answer]')];
+  const explanation = conclusion.querySelector('[data-shade-explanation]');
+  const evidence = conclusion.querySelector('[data-shade-evidence]');
+  const back = lab.querySelector('[data-shade-return]');
+  const transfer = conclusion.querySelector('[data-shade-transfer]');
   const saved = values.shadeSpots ?? legacyItems;
   let selection = Array.isArray(saved)
     ? [...new Set(saved.filter(id => Number.isInteger(id) && shadeLabels[id]))].slice(-2)
     : [];
+
+  function showConclusion(rightPair) {
+    const answered = typeof values.shadeConclusionAnswer === 'boolean';
+    const correct = values.shadeConclusionAnswer === false;
+    conclusion.hidden = !rightPair || values.shadeConclusionOpen !== true;
+    start.hidden = !rightPair || !conclusion.hidden;
+    back.hidden = true;
+    records.removeAttribute('data-evidence');
+    choices.forEach(button => button.setAttribute('aria-pressed',
+      String(answered && (button.dataset.shadeAnswer === 'true') === values.shadeConclusionAnswer)));
+    explanation.textContent = !answered ? '' : correct
+      ? '这两个模拟测点在这一次记录中相差 6 ℃。想知道别处或别的日子是否也一样，要在相同条件下多测几次。'
+        + (values.shadeConclusionFirst === false ? ' 首次判断正确。' : ' 已根据记录改对。')
+      : '“总能”把一次结果用到了所有地方和时段。甲、乙都只记录了同一天 13:00，先看看这两条记录，再改一次判断。';
+    evidence.hidden = !answered;
+    transfer.hidden = !correct;
+  }
 
   function show() {
     controls.forEach(button => button.setAttribute('aria-pressed', String(selection.includes(Number(button.dataset.shadeSpot)))));
     records.innerHTML = selection.length ? selection.map(id => `<div class="shade-reading">
       <small>${'甲乙丙'[id]} · ${id === 2 ? '16:00 · 马路' : '13:00 · 草地'}</small><strong>${shadeReadings[id]} ℃</strong></div>`).join('')
       : '<span class="lab-instruction">测温记录会显示在这里。</span>';
+    const rightPair = selection.length === 2 && !selection.includes(2);
+    showConclusion(rightPair);
     if (selection.length < 2) {
       feedback.textContent = selection.length === 1 ? '还差一个可对照的测点。看看地面和记录时间是否相同。' : '';
       return false;
     }
-    if (selection.includes(2)) {
-      feedback.textContent = '丙点换了地面和测量时间。气温差里可能混有其他影响。换一对再试。';
+    if (!rightPair) {
+      feedback.textContent = selection.includes(0)
+        ? '甲在 13:00 的草地，丙在 16:00 的马路。时间和地面也变了，温差可能混有其他影响。试着换掉丙。'
+        : '乙、丙都在日照下，缺了树荫测点。它们的时间和地面也不同。找一个树荫下、能与乙公平比较的点。';
       return false;
     }
-    feedback.textContent = '这对的地面和时段相同。模拟记录里，树荫下比日照处低 6 ℃，只说明这次对应测点的差异。';
+    const progress = values.shadePairOutcome;
+    feedback.textContent = '甲、乙都是 13:00 的草地，测量高度也相同。这次模拟中，树荫处比日照处低 6 ℃。'
+      + (progress === 'independent' ? ' 第一次就找到了可比测点。' : progress === 'assisted' ? ' 对照后已找对测点。' : '');
     return true;
   }
   controls.forEach(button => button.addEventListener('click', () => {
     const id = Number(button.dataset.shadeSpot);
     selection = selection.includes(id) ? selection.filter(value => value !== id) : [...selection, id].slice(-2);
     values.shadeSpots = selection;
+    if (selection.length === 2 && !values.shadePairOutcome) {
+      if (selection.includes(2)) values.shadePairHelp = true;
+      else values.shadePairOutcome = values.shadePairHelp ? 'assisted' : 'independent';
+    }
     if (show()) complete();
     save();
     keepLabVisible(lab, button, feedback);
   }));
   lab.querySelector('[data-shade-hint]').addEventListener('click', event => {
+    if (!values.shadePairOutcome) {
+      values.shadePairHelp = true;
+      save();
+    }
     feedback.textContent = '想只比树荫，先找地面类型和时段都相同、一个有树荫一个有日照的两点。';
     keepLabVisible(lab, event.currentTarget, feedback);
   });
+  function focusNear(target) {
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }
+  start.addEventListener('click', () => {
+    values.shadeConclusionOpen = true;
+    save();
+    showConclusion(true);
+    focusNear(title);
+  });
+  choices.forEach(button => button.addEventListener('click', () => {
+    const answer = button.dataset.shadeAnswer === 'true';
+    if (typeof values.shadeConclusionFirst !== 'boolean') values.shadeConclusionFirst = answer;
+    values.shadeConclusionAnswer = answer;
+    save();
+    showConclusion(true);
+    keepActivityFeedbackVisible(button, explanation);
+  }));
+  evidence.addEventListener('click', () => {
+    back.hidden = false;
+    records.dataset.evidence = 'true';
+    focusNear(records);
+  });
+  back.addEventListener('click', () => focusNear(title));
+  transfer.addEventListener('click', () => outlet.querySelector('[data-review-jump]')?.click());
   show();
 }
 

@@ -78,10 +78,11 @@ function renderCell(entry) {
         </div>
         <div class="controls cell-controls">
           <p class="feedback cell-feedback" data-sample-feedback role="status"></p>
-          <p class="cell-small-note">图片的比例不同，用来比较外形和可见结构。</p>
+          <p class="cell-small-note" data-cell-scale tabindex="-1">图片的比例不同，用来比较外形和可见结构。</p>
+          <button type="button" class="text-control" data-cell-back-to-quiz hidden>继续刚才的细胞判断 →</button>
         </div>
       </div>
-      <details class="cell-extension">
+      <details class="cell-extension" data-cell-model>
         <summary>把实拍和细胞结构模型对一对</summary>
         <div class="cell-extension-content">
           <p>伊乐藻叶片照片里可以找到叶绿体。细胞膜、细胞核和液泡在这张照片里难以分辨，可以看下面的示意图。植物细胞有的含叶绿体，洋葱鳞片叶的内表皮细胞通常缺少叶绿体。</p>
