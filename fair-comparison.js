@@ -1,4 +1,4 @@
-import { fairComparisonBank } from './fair-comparison-bank.js?v=1';
+import { fairComparisonBank, fairComparisonRepractice } from './fair-comparison-bank.js?v=2';
 
 const duration = 30_000;
 const finalQuestion = fairComparisonBank.at(-1);
@@ -26,7 +26,8 @@ function cleanRun(raw) {
   for (const item of fairComparisonBank) {
     const main = cleanAnswer(raw?.answers?.[item.id]?.main, item);
     const variant = cleanAnswer(raw?.answers?.[item.id]?.variant, item.variant);
-    if (main) answers[item.id] = {main, ...(variant && {variant})};
+    const practice = cleanAnswer(raw?.answers?.[item.id]?.practice, fairComparisonRepractice[item.id]);
+    if (main) answers[item.id] = {main, ...(variant && {variant}), ...(variant && practice && {practice})};
   }
   const requested = Number.isInteger(raw?.cursor) ? Math.max(0, raw.cursor) : 0;
   const nextUnfinished = fairComparisonBank.findIndex(item => !answers[item.id]?.main.done);
@@ -36,6 +37,8 @@ function cleanRun(raw) {
   return {
     mode: ['timed', 'untimed'].includes(raw?.mode) ? raw.mode : null,
     cursor, answers, activeVariant,
+    activeAttempt: activeVariant && raw?.activeAttempt === 'practice' && answers[activeVariant]?.variant?.done
+      ? 'practice' : 'variant',
     draft: raw?.draft ?? null,
     remainingMs: typeof raw?.remainingMs === 'number' && Number.isFinite(raw.remainingMs)
       ? Math.max(0, Math.min(duration, raw.remainingMs)) : null,
@@ -49,6 +52,10 @@ function materialCard(material) {
     <tbody>${material.rows.map(row => `<tr><th scope="row">${escape(row[0])}</th>${row.slice(1).map(cell => `<td>${escape(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
   </table></div>` : '';
   return `<section class="fair-material" aria-label="同屏材料"><h2>${escape(material.title)}</h2><p>${escape(material.note)}</p>${table}</section>`;
+}
+
+function questionFor(item, kind) {
+  return kind === 'practice' ? fairComparisonRepractice[item.id] : kind === 'variant' ? item.variant : item;
 }
 
 export function mountFairComparison(root, {read, write, returnHref, returnLabel}) {
@@ -80,9 +87,19 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     return fairComparisonBank.reduce((count, item) => count + pointFor(item), 0);
   }
 
-  function nextVariant() {
-    return fairComparisonBank.find(item => !state.answers[item.id]?.variant?.done &&
-      (state.answers[item.id]?.main?.first !== item.answer || item === finalQuestion));
+  function verified(item, run = state) {
+    const answers = run.answers[item.id];
+    return answers?.variant?.first === item.variant.answer ||
+      answers?.practice?.first === fairComparisonRepractice[item.id].answer;
+  }
+
+  function nextVerification(run = state) {
+    const newItem = fairComparisonBank.find(item => !run.answers[item.id]?.variant?.done &&
+      (run.answers[item.id]?.main?.first !== item.answer || item === finalQuestion));
+    if (newItem) return {item: newItem, kind: 'variant'};
+    const practice = fairComparisonBank.find(item => run.answers[item.id]?.variant?.done &&
+      !verified(item, run) && !run.answers[item.id].practice?.done);
+    return practice ? {item: practice, kind: 'practice'} : null;
   }
 
   function activeItem() {
@@ -93,12 +110,13 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     const rows = fairComparisonBank.map((candidate, index) => {
       const record = state.answers[candidate.id];
       const current = item === candidate;
-      const status = pointFor(candidate) ? '已得分' : !record ? '还没作答'
-        : !record.main.done ? '订正中' : record.variant?.done ? '还要复习' : '可换题验证';
+      const status = !record ? '还没作答' : !record.main.done ? '订正中'
+        : verified(candidate) ? '独立通过' : record.variant?.done ? '还要复习'
+          : pointFor(candidate) ? '已得分' : '可换题验证';
       return `<li${current ? ' aria-current="step"' : ''} data-fair-marker="${candidate.id}" data-status="${status}"><span aria-hidden="true">${index + 1}</span><span class="fair-sr">第 ${index + 1} 题，${status}</span></li>`;
     }).join('');
     const status = kind === 'main' ? `第 ${state.cursor + 1} / ${fairComparisonBank.length} 题`
-      : kind === 'variant' ? `新材料 · 第 ${fairComparisonBank.indexOf(item) + 1} 题` : `已做 ${state.cursor} / ${fairComparisonBank.length} 题`;
+      : item ? `${kind === 'practice' ? '复练' : '新材料'} · 第 ${fairComparisonBank.indexOf(item) + 1} 题` : `已做 ${state.cursor} / ${fairComparisonBank.length} 题`;
     return `<aside class="fair-progress" aria-label="本关进度">
       <p class="fair-eyebrow">生物学的研究方法</p><h2>本关进度</h2><p>${status}</p>
       <ol aria-label="逐题进度">${rows}</ol><p>累计 <strong data-fair-points>${total()}</strong> 分</p>
@@ -125,7 +143,7 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
   }
 
   function questionView(item, kind, {feedbackFocus = false} = {}) {
-    const question = kind === 'variant' ? item.variant : item;
+    const question = questionFor(item, kind);
     const result = state.answers[item.id]?.[kind];
     const done = result?.done === true;
     const selected = state.draft?.id === item.id && state.draft?.kind === kind && validOption(state.draft?.choice, question)
@@ -134,9 +152,11 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     if (done) {
       const success = result.first === question.answer;
       const title = result.assisted ? '把思路看完了。' : success ? '答对了。' : '这次改对了。';
-      const alreadyScored = kind === 'variant' && state.answers[item.id].main.first === item.answer;
-      const recovery = kind === 'main' ? '关末可以用新材料验证补分。' : '这道新材料的首答没有得分。';
-      const score = alreadyScored ? '这项能力已得过分。' : success ? '获得 1 分。' : recovery;
+      let score;
+      if (kind === 'practice') score = success ? '独立验证通过。本题不计分。' : '已按提示完成，仍需练习。本题不计分。';
+      else if (kind === 'variant' && !success) score = '已按提示完成。再换一道新材料练一练。';
+      else if (kind === 'variant' && state.answers[item.id].main.first === item.answer) score = '独立验证通过。分数照旧。';
+      else score = success ? '获得 1 分。' : '关末可以用新材料验证补分。';
       feedback = `<div class="fair-feedback is-right" data-fair-feedback tabindex="-1"><h2>${title} ${score}</h2>
         <p>${escape(question.feedback[question.answer])} ${escape(question.explanation)}</p></div>`;
     } else if (result) {
@@ -147,11 +167,11 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     const choices = question.options.map((option, index) => `<label class="fair-choice">
       <input type="radio" name="fair-answer" value="${index}"${(done ? index === question.answer : index === selected) ? ' checked' : ''}${done ? ' disabled' : ''}>
       <span>${escape(option)}</span></label>`).join('');
-    const nextLabel = kind === 'variant' || state.cursor === fairComparisonBank.length - 1 ? '看本关结果' : '下一题';
+    const nextLabel = kind !== 'main' || state.cursor === fairComparisonBank.length - 1 ? '看本关结果' : '下一题';
     const actions = done ? `<button type="button" class="action" data-fair-next>${nextLabel}</button>` :
       `<button type="button" class="action" data-fair-submit>${result ? '核对订正' : '提交答案'}</button>
         ${result?.tries >= 2 ? '<button type="button" class="fair-minor" data-fair-model>看一遍思路</button>' : ''}`;
-    display(`<p class="fair-eyebrow">${kind === 'variant' ? '换份材料自己试' : result && !done ? '在原题订正' : '单项选择'}</p>
+    display(`<p class="fair-eyebrow">${kind === 'practice' ? '新材料复练 · 不计分' : kind === 'variant' ? '换份材料自己试' : result && !done ? '在原题订正' : '单项选择'}</p>
       <h1 id="lesson-title" tabindex="-1">${escape(question.prompt)}</h1>
       ${materialCard(question.material)}
       ${done ? '' : feedback}
@@ -164,26 +184,36 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
 
   function summary() {
     const points = total();
-    const target = nextVariant();
+    const target = nextVerification();
     const totalFirst = fairComparisonBank.filter(item => state.answers[item.id]?.main?.first === item.answer).length;
-    const results = fairComparisonBank.map(item => `<li><span>${escape(item.topic)}</span><strong>${pointFor(item) ? '已得分'
-      : state.answers[item.id]?.variant?.done ? '新材料还要练' : '可用新材料补分'}</strong></li>`).join('');
+    const ready = fairComparisonBank.filter(item => verified(item)).length;
+    const guided = fairComparisonBank.filter(item => state.answers[item.id]?.variant?.done && !verified(item)).length;
+    const results = fairComparisonBank.map(item => {
+      const answer = state.answers[item.id];
+      const check = verified(item) ? '新材料独立通过' : answer?.variant?.done ? '按提示完成，仍需练'
+        : item === finalQuestion || !pointFor(item) ? '等新材料验证' : '主线已完成';
+      return `<li><span>${escape(item.topic)}</span><strong>${pointFor(item)} 分 · ${check}</strong></li>`;
+    }).join('');
     const card = points === fairComparisonBank.length ? `<div class="fair-reward"><h2>收藏卡 · 公平比较</h2>
       <p>先圈要检验的条件，再把其他条件、观察时间和测量标准对齐。看到差异，先判断这次证据能说明多少。</p></div>` : '';
+    const nextMessage = target?.kind === 'practice' ? `「${escape(target.item.topic)}」刚才按提示做完了，试一份全新的材料。复练不计分。`
+      : target && pointFor(target.item) ? '再换一道新材料，看看这个方法能不能用到另一件事。'
+        : target ? `用新材料再试「${escape(target.item.topic)}」。首答正确可补 1 分。`
+          : guided ? '这轮还留有需要练习的内容，可展开记录看看是哪一项。' : '本关的新材料验证已完成。';
     display(`<h1 id="lesson-title" tabindex="-1">10 道题做完了</h1>
       <p class="fair-lede">首答正确 ${totalFirst} 道 · 累计 ${points} 分</p>
       ${card}
-      ${target ? `<p class="fair-summary-next">${pointFor(target) ? '再换一道新材料，看看这个方法能不能用到另一件事。' : `用新材料再试「${escape(target.topic)}」。首答正确可补 1 分。`}</p>
-        <button type="button" class="action" data-fair-verify>试一道新材料</button>`
-        : `<p class="fair-summary-next">${points < fairComparisonBank.length ? '看一看哪些知识还需要练习。' : '新材料验证也完成了。'}</p>
-           <a class="action" href="${escape(returnHref)}">${escape(returnLabel)}</a>`}
+      <p class="fair-verification" data-fair-verification>新材料 · ${ready} 项独立通过${guided ? ` · ${guided} 项按提示完成，仍需练` : ''}</p>
+      <p class="fair-summary-next">${nextMessage}</p>
+      ${target ? `<button type="button" class="action" data-fair-verify>${target.kind === 'practice' ? '做一道新题复练' : '试一道新材料'}</button>`
+        : `<a class="action" href="${escape(returnHref)}">${escape(returnLabel)}</a>`}
       <details class="fair-summary"><summary>查看这 10 题的记录</summary><ol>${results}</ol></details>`);
   }
 
   function render(options = {}) {
     if (!state.mode) return intro();
     const item = activeItem();
-    if (item) return questionView(item, state.cursor < fairComparisonBank.length ? 'main' : 'variant', options);
+    if (item) return questionView(item, state.cursor < fairComparisonBank.length ? 'main' : state.activeAttempt, options);
     summary();
   }
 
@@ -228,12 +258,12 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
   }
 
   function recordAnswer(item, kind, choice, assisted = false) {
-    const question = kind === 'variant' ? item.variant : item;
+    const question = questionFor(item, kind);
     const expired = kind === 'main' && deadline > 0 && performance.now() >= deadline;
     stopTimer();
     const actual = expired ? null : choice;
     save(draft => {
-      if (kind === 'main' ? fairComparisonBank[draft.cursor] !== item : draft.activeVariant !== item.id) return false;
+      if (!currentAttempt(draft, item, kind)) return false;
       const attempts = draft.answers[item.id] ??= {};
       const previous = attempts[kind];
       if (previous?.done || (actual === null && previous)) return false;
@@ -260,11 +290,11 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
   }
 
   function verify() {
-    const target = nextVariant();
-    if (!target) return;
     save(draft => {
-      if (draft.cursor < fairComparisonBank.length || draft.activeVariant || draft.answers[target.id]?.variant?.done) return false;
-      draft.activeVariant = target.id;
+      const target = nextVerification(draft);
+      if (draft.cursor < fairComparisonBank.length || draft.activeVariant || !target) return false;
+      draft.activeVariant = target.item.id;
+      draft.activeAttempt = target.kind;
       draft.draft = null;
     });
     render();
@@ -272,10 +302,12 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
 
   function advance(item, kind) {
     save(draft => {
-      if (!draft.answers[item.id]?.[kind]?.done) return false;
-      if (kind === 'main' && fairComparisonBank[draft.cursor] === item) draft.cursor += 1;
-      else if (kind === 'variant' && draft.activeVariant === item.id) draft.activeVariant = null;
-      else return false;
+      if (!currentAttempt(draft, item, kind) || !draft.answers[item.id]?.[kind]?.done) return false;
+      if (kind === 'main') draft.cursor += 1;
+      else {
+        draft.activeVariant = null;
+        draft.activeAttempt = 'variant';
+      }
       draft.draft = null;
       draft.remainingMs = null;
     });
@@ -284,8 +316,13 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
 
   function context() {
     const item = activeItem();
-    const kind = state.cursor < fairComparisonBank.length ? 'main' : 'variant';
-    return {item, kind, question: kind === 'variant' ? item?.variant : item};
+    const kind = state.cursor < fairComparisonBank.length ? 'main' : state.activeAttempt;
+    return {item, kind, question: item && questionFor(item, kind)};
+  }
+
+  function currentAttempt(run, item, kind) {
+    return kind === 'main' ? fairComparisonBank[run.cursor] === item
+      : run.activeVariant === item.id && run.activeAttempt === kind;
   }
 
   root.addEventListener('change', event => {
@@ -294,7 +331,7 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     const choice = Number(event.target.value);
     if (!question || !validOption(choice, question)) return;
     save(draft => {
-      if (kind === 'main' ? fairComparisonBank[draft.cursor] !== item : draft.activeVariant !== item.id) return false;
+      if (!currentAttempt(draft, item, kind)) return false;
       if (draft.answers[item.id]?.[kind]?.done) return false;
       draft.draft = {id: item.id, kind, choice};
     });

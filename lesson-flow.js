@@ -75,7 +75,11 @@ function buildLessonPanes(root, entry) {
     add('observe', '看笔记', '先看两份笔记', [activity]);
     const practice = calculation ? flowDisclosure('算一算长高了多少', [calculation]) : null;
     add('compare', '比读数', '选两条记录来比较', [evidence, practice]);
-    add('reason', '找原因', '试试怎样找原因', [sample]);
+    add('reason', '公平比较', '选一对公平的对照', [biologyObservationCheck(entry, 'reason', bioObservationChecks[entry.id].causes)]);
+  } else if (typeof bioObservationChecks !== 'undefined' && bioObservationChecks[entry.id]?.study) {
+    for (const {stage, label, action, task} of bioObservationChecks[entry.id].study) {
+      add(stage, label, action, [biologyObservationCheck(entry, stage, task)]);
+    }
   } else {
     const action = project || entry.project ? '开始做项目' : '开始观察';
     add('observe', project || entry.project ? '做项目' : '看材料', action, [context, safety, activity, examples]);
@@ -109,7 +113,7 @@ function mountLessonFlow(entry, resumeReview) {
   const firstThought = document.createElement('p');
   firstThought.className = 'flow-first-thought';
   firstThought.hidden = true;
-  const sample = typeof bioObservationChecks !== 'undefined' ? bioObservationChecks[entry.id] : null;
+  const tailored = typeof bioObservationChecks !== 'undefined' && bioObservationChecks[entry.id]?.study;
   const transfer = typeof biologyTransferCase === 'function' ? biologyTransferCase(entry.id) : null;
   if (practice && observePhase) {
     opening.innerHTML = `<h2 id="flow-opening-question">${escape(practice.prompt || questions[0])}</h2>
@@ -133,12 +137,7 @@ function mountLessonFlow(entry, resumeReview) {
     opening.innerHTML = '<h2>带着这两个问题学</h2>';
     opening.append(questionList);
   }
-  if (sample?.observe && observePhase) {
-    const previousActivity = observePhase.content.findIndex(node => node.matches('.term-activity'));
-    if (previousActivity !== -1) {
-      observePhase.content.splice(previousActivity, 1, biologyObservationCheck(entry, 'observe', sample.observe));
-    }
-  } else if (observePhase && typeof biologyClassroomCase === 'function') {
+  if (!tailored && observePhase && typeof biologyClassroomCase === 'function') {
     const classroom = biologyClassroomCase(entry);
     if (classroom) phases.splice(phases.indexOf(observePhase) + 1, 0, {
       id: 'reason', label: '用材料判断', action: '用材料核对',
@@ -208,7 +207,7 @@ function mountLessonFlow(entry, resumeReview) {
 
   let current;
   let mainStep;
-  const taskSelector = '[data-quiz]:not([hidden]), [data-review-content]:not([hidden]), [data-observation-check]';
+  const taskSelector = '[data-quiz]:not([hidden]), [data-review-content]:not([hidden]), [data-observation-check], [data-order-gate]';
   function syncForward(phase) {
     if (!phase.forward) return;
     const tasks = Array.from(phase.pane.querySelectorAll(taskSelector));
@@ -217,7 +216,7 @@ function mountLessonFlow(entry, resumeReview) {
     phase.forward.hidden = !ready;
     phase.forward.classList.toggle('action', ready && !(phase.id === 'start' && practice && observePhase));
     if (phase.retry) phase.retry.hidden = !retry ||
-      Boolean(retry.querySelector('[data-cell-find-evidence].action:not([hidden])'));
+      retry.hasAttribute('data-order-gate') || Boolean(retry.querySelector('[data-cell-find-evidence].action:not([hidden])'));
     const method = phase.pane.querySelector('.flow-after-review');
     if (method) method.hidden = !ready;
     if (tasks.length) {
@@ -359,7 +358,7 @@ function mountLessonFlow(entry, resumeReview) {
     syncForward(phase);
   });
   const saved = state.activities?.[entry.id]?.flowStage;
-  const restored = phases.find(phase => phase.id === saved);
+  const restored = phases.find(phase => phase.id === saved) ?? (saved === 'reason' && entry.activity?.kind === 'order' ? observePhase : null);
   const previousReview = resumeReview ? reviewPhase : null;
   stepTo(restored ?? previousReview ?? phases[0], { focus: false, remember: !restored && Boolean(previousReview) });
   return true;

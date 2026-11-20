@@ -38,7 +38,7 @@ function activityMarkup(activity) {
       </div>${order ? '<p class="order-summary" data-order-summary hidden></p>' : ''}<div class="activity-actions">
         <button type="button" class="action" data-activity-check>核对${order ? '顺序' : '线索'}</button>
         <button type="button" class="text-control" data-activity-hint>还不确定</button>
-        ${order ? '<button type="button" class="text-control" data-activity-clear>重新排</button>' : ''}
+        ${order ? '<button type="button" class="text-control" data-activity-clear>重新排</button><button type="button" class="text-control" data-activity-model hidden>看顺序示范</button>' : ''}
       </div>`;
     }
     case 'project':
@@ -239,8 +239,32 @@ function mountTermActivity(entry, replaceActivity) {
     const order = activity.kind === 'order';
     const items = [...host.querySelectorAll('[data-item]')];
     const orderSummary = host.querySelector('[data-order-summary]');
-    let selection = Array.isArray(record.items)
-      ? [...new Set(record.items.filter(index => Number.isInteger(index) && items[index]))] : [];
+    const check = host.querySelector('[data-activity-check]');
+    const hint = host.querySelector('[data-activity-hint]');
+    const clear = host.querySelector('[data-activity-clear]');
+    const model = host.querySelector('[data-activity-model]');
+    const savedSelection = order && Array.isArray(record.orderCheck?.selection) ? record.orderCheck.selection : record.items;
+    let selection = Array.isArray(savedSelection)
+      ? [...new Set(savedSelection.filter(index => Number.isInteger(index) && items[index]))] : [];
+    const correctSelection = () => activity.answer.length === selection.length && activity.answer.every((value, index) =>
+      order ? value === selection[index] : selection.includes(value));
+    const checked = order && record.orderCheck?.selection?.length === selection.length &&
+      selection.every((index, position) => index === record.orderCheck.selection[position]);
+    let outcome = checked && correctSelection() && ['independent', 'guided'].includes(record.orderCheck.outcome)
+      ? record.orderCheck.outcome : checked && record.orderCheck.outcome === 'retry' ? 'retry' : 'ready';
+    let usedHint = checked && record.orderCheck.usedHint === true;
+    let canShowModel = checked && record.orderCheck.canShowModel === true;
+    const completed = () => outcome === 'independent' || outcome === 'guided';
+    function assessmentText() {
+      if (completed()) return (outcome === 'guided' ? '已按线索或示范排好。' : '') + activity.result;
+      const position = activity.answer.findIndex((value, index) => value !== selection[index]);
+      return position >= 0 && selection[position] !== undefined
+        ? `再看看第 ${position + 1} 步。你放了「${activity.tiles[selection[position]].label}」。${activity.hint}`
+        : activity.hint;
+    }
+    function saveOrder() {
+      saveActivityField(entry.id, 'orderCheck', {selection: [...selection], outcome, usedHint, canShowModel});
+    }
     function display() {
       if (orderSummary) {
         orderSummary.hidden = selection.length === 0;
@@ -256,35 +280,68 @@ function mountTermActivity(entry, replaceActivity) {
           const tile = activity.tiles[index];
           const label = [tile.label, tile.text, position >= 0 ? `排在第 ${position + 1} 位` : ''].filter(Boolean);
           button.setAttribute('aria-label', label.join('，'));
+          button.disabled = completed();
         }
       });
+      if (order) {
+        check.hidden = completed();
+        check.disabled = selection.length !== activity.answer.length;
+        hint.hidden = clear.hidden = completed();
+        model.hidden = completed() || !canShowModel;
+        showQuizOutcome(host, completed() ? 'correct' : outcome);
+      }
     }
     function editSelection(newSelection) {
       selection = newSelection;
+      if (order) outcome = 'ready';
       display();
       feedback.textContent = '';
-      saveActivityField(entry.id, 'items', selection);
+      if (order) saveOrder();
+      else saveActivityField(entry.id, 'items', selection);
     }
     items.forEach((button, index) => button.addEventListener('click', () => {
       const next = selection.includes(index) ? selection.filter(value => value !== index) : [...selection, index];
       editSelection(next);
     }));
-    host.querySelector('[data-activity-clear]')?.addEventListener('click', () => editSelection([]));
-    host.querySelector('[data-activity-hint]').addEventListener('click', event => {
+    clear?.addEventListener('click', () => editSelection([]));
+    hint.addEventListener('click', event => {
       feedback.textContent = activity.hint;
+      if (order) {
+        usedHint = canShowModel = true;
+        saveOrder();
+        display();
+      }
       keepActivityFeedbackVisible(event.currentTarget, feedback);
     });
-    host.querySelector('[data-activity-check]').addEventListener('click', event => {
-      const right = activity.answer.length === selection.length && activity.answer.every((value, index) =>
-        order ? value === selection[index] : selection.includes(value));
-      const position = order && selection.length === activity.answer.length
-        ? activity.answer.findIndex((value, index) => value !== selection[index]) : -1;
-      feedback.textContent = right ? activity.result : position >= 0
-        ? `再看看第 ${position + 1} 步。你放了「${activity.tiles[selection[position]].label}」。${activity.hint}`
-        : activity.hint;
-      keepActivityFeedbackVisible(event.currentTarget, feedback);
+    model?.addEventListener('click', () => {
+      selection = [...activity.answer];
+      outcome = 'guided';
+      feedback.textContent = assessmentText();
+      saveOrder();
+      markPracticed(entry);
+      display();
+      feedback.focus();
+    });
+    check.addEventListener('click', event => {
+      const right = correctSelection();
+      if (order) {
+        outcome = right ? usedHint ? 'guided' : 'independent' : 'retry';
+        feedback.textContent = assessmentText();
+        if (!right) usedHint = canShowModel = true;
+        saveOrder();
+        display();
+        feedback.focus();
+      } else {
+        feedback.textContent = right ? activity.result : activity.hint;
+        keepActivityFeedbackVisible(event.currentTarget, feedback);
+      }
       if (right) markPracticed(entry);
     });
+    if (order) {
+      host.dataset.orderGate = '';
+      feedback.tabIndex = -1;
+      if (outcome !== 'ready') feedback.textContent = assessmentText();
+    }
     display();
     paintActivityArt(host);
   }

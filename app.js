@@ -77,7 +77,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=${id === '8a' ? 9 : id === '8b' ? 11 : 10}`;
+    script.src = `./term-${id}.js?v=${id === '8a' ? 9 : id === '8b' ? 12 : 10}`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -1066,7 +1066,7 @@ async function render(focus = false) {
     document.title = '哪两组能公平比较？ · 生物实验台';
     outlet.innerHTML = '<section class="load-panel"><h1 id="lesson-title" tabindex="-1">哪两组能公平比较？</h1><p role="status">正在准备闯关题目……</p></section>';
     try {
-      const { mountFairComparison } = await import('./fair-comparison.js?v=2');
+      const { mountFairComparison } = await import('./fair-comparison.js?v=3');
       if (routeVersion !== version) return;
       unmountFairComparison = mountFairComparison(outlet, {
         returnHref,

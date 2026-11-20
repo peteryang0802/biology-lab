@@ -1,7 +1,24 @@
 'use strict';
 
+function observationDiagram(kind) {
+  if (kind !== 'breathing-hood') return '';
+  return `<figure class="observation-diagram">
+    <svg viewBox="0 0 330 158" role="img" aria-label="外界连向穿过密封塞的Y形导管，两支管各通往一个气球，导管与气球外的罩腔隔绝。底部软膜向下拉。" xmlns="http://www.w3.org/2000/svg">
+      <path d="M94 140 V67 Q94 54 105 48 L125 40 V32 H203 V40 L223 48 Q234 54 234 67 V140 Z" fill="#f5f9fd" stroke="#507ba9" stroke-width="2"/>
+      <rect x="124" y="26" width="80" height="13" rx="3" fill="#967351"/>
+      <path d="M94 140 Q164 157 234 140" fill="none" stroke="#567741" stroke-width="4"/>
+      <ellipse cx="133" cy="101" rx="22" ry="29" fill="#aad8ef" stroke="#426e98" stroke-width="2"/>
+      <ellipse cx="196" cy="101" rx="22" ry="29" fill="#aad8ef" stroke="#426e98" stroke-width="2"/>
+      <path d="M164 10 V62 L133 87 M164 62 L196 87" fill="none" stroke="#244a70" stroke-width="6" stroke-linecap="round"/>
+      <g fill="#244a70" font-size="13" font-family="sans-serif"><text x="183" y="17">外界</text><text x="34" y="32">密封塞</text><text x="253" y="60">罩腔</text><text x="252" y="104">气球</text><text x="248" y="149">软膜</text></g>
+      <path d="M81 28 H124 M250 55 L225 67 M249 99 L217 101 M244 143 L232 142" stroke="#507ba9" fill="none" stroke-width="1.5"/>
+    </svg>
+    <figcaption>呼吸演示模型 · 管子和罩腔是分开的</figcaption>
+  </figure>`;
+}
+
 function biologyObservationCheck(entry, stage, task) {
-  const key = stage === 'review' ? 'transferEvidence' : 'lessonEvidence';
+  const key = stage === 'review' ? 'transferEvidence' : task.storageKey || 'lessonEvidence';
   const old = state.activities?.[entry.id]?.[key];
   const saved = old?.task === task.id ? old : {};
   let picks = Array.isArray(saved.picks) ? [...new Set(saved.picks.filter(i => Number.isInteger(i) && task.choices[i]))] : [];
@@ -20,6 +37,7 @@ function biologyObservationCheck(entry, stage, task) {
     <h2>${escape(task.prompt)}</h2>
     <div class="observation-grid">
       <fieldset class="observation-records"><legend>${escape(task.source || '观察记录')}</legend>
+        ${observationDiagram(task.diagram)}
         ${task.records.map((text, index) => `<div class="observation-record" data-record-line="${index}"><span>${escape(text)}</span>
           <button type="button" data-pick-record="${index}" aria-pressed="false" hidden>${escape(text)}</button></div>`).join('')}
       </fieldset>

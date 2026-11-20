@@ -50,7 +50,8 @@ function applyProgressChanges(before, local, stored, path = []) {
   const key = path.at(-1);
   if (key === 'versions' || key === 'draftHistory') return combineDraftVersions(stored, local);
   if (key === 'reviewHistory') return combineReviewHistory(stored, local);
-  if (path.length === 3 && path[0] === 'activities' && ['lessonEvidence', 'transferEvidence'].includes(key)) return local;
+  if (path.length === 3 && path[0] === 'activities' && ['lessonEvidence', 'transferEvidence', 'orderCheck',
+    'researchControlEvidence', 'ecosystemComponents', 'ecosystemWeb', 'ecosystemCarbon', 'ecosystemRegulation'].includes(key)) return local;
   if (local === undefined) return undefined;
   const arrayDraft = path.length === 3 && path[0] === 'activities' && key === 'draft' && Array.isArray(local);
   if (!plainRecord(local) && !arrayDraft) {

@@ -57,7 +57,7 @@
   font-size: .78rem;
 }
 .fair-progress li[aria-current] { font-weight: 800; outline: 2px solid var(--fair-violet); outline-offset: 1px; }
-.fair-progress li[data-status="已得分"] { background: var(--fair-green); color: var(--fair-green-ink); border-color: var(--fair-green-line); }
+.fair-progress li:is([data-status="已得分"], [data-status="独立通过"]) { background: var(--fair-green); color: var(--fair-green-ink); border-color: var(--fair-green-line); }
 .fair-progress li[data-status="可换题验证"], .fair-progress li[data-status="还要复习"] { background: var(--fair-amber); color: var(--fair-amber-ink); border-color: var(--fair-amber-line); }
 .fair-eyebrow { font-weight: 700; font-size: .8rem; color: var(--fair-violet); }
 .fair-timer { margin-top: .55rem; font-variant-numeric: tabular-nums; }
@@ -138,6 +138,7 @@
 }
 .fair-input-message { font-size: .9rem; color: var(--fair-amber-ink); }
 .fair-summary-next { margin-block: .75rem .5rem; }
+.fair-verification { font-weight: 650; margin-top: .6rem; }
 .fair-summary { margin-top: .65rem; color: var(--muted); }
 .fair-summary summary { color: var(--accent-deep); cursor: pointer; }
 .fair-summary ol { margin-block: .3rem 0; font-size: .89rem; }

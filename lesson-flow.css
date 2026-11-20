@@ -1,4 +1,8 @@
 /* Use the same quiet palette for the same reading task throughout a lesson. */
+.observation-diagram { margin: 0 0 .45rem; }
+.observation-diagram svg { display: block; width: 100%; max-width: 18rem; height: auto; }
+.observation-diagram figcaption { font-size: .75rem; color: var(--muted); }
+
 #lesson .lesson-flow {
   --flow-material: #e8f1fb;
   --flow-material-ink: #244a70;
