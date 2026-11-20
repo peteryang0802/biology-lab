@@ -23,6 +23,12 @@ function mountTermReview(entry, record) {
   const current = validRun ? history.find(attempt => attempt.id === saved.id && attempt.variant === saved.variant) : history.at(-1) || legacy;
   let variant = validRun ? saved.variant : current?.variant || 'base';
   let attemptId = current?.id || (validRun ? saved.id : makeId());
+  let assisted = Boolean(current?.assisted || (validRun && saved.assisted));
+  let firstChoice = Number.isInteger(current?.firstChoice) ? current.firstChoice : current?.choice;
+
+  function rememberRun() {
+    saveActivityField(entry.id, 'reviewRun', { id: attemptId, variant, assisted });
+  }
 
   function showAttempt(answered) {
     const activity = variants[variant];
@@ -35,6 +41,7 @@ function mountTermReview(entry, record) {
       </div>
       <button type="button" class="text-control" data-review-hint>还不确定</button>
       <p class="activity-feedback" role="status"></p>
+      <button type="button" class="text-control" data-review-evidence hidden>回看本课材料 ↑</button>
       <button type="button" class="text-control review-again" data-review-again hidden>${variants.alternate ? '换份材料再试' : '再试一次'}</button>
       ${previous ? `<details class="review-history"><summary>看上次的答法</summary>
         <p>${escape(variants[previous.variant].prompt)}</p>
@@ -44,17 +51,21 @@ function mountTermReview(entry, record) {
     const options = [...content.querySelectorAll('[data-review-option]')];
     const again = content.querySelector('[data-review-again]');
 
-    function showAnswer(index) {
+    function showAnswer(index, attempt) {
       const correct = index === activity.answer;
       content.dataset.result = correct ? 'correct' : 'retry';
-      feedback.textContent = (correct ? '答对了。' : '还需对照。') + activity.options[index][1].replace(/^对。/, '');
+      const outcome = !correct || !Number.isInteger(attempt?.firstChoice) ? ''
+        : attempt.assisted ? ' 参考材料或提示后答对。'
+          : attempt.firstChoice === index ? ' 首次答对。' : ' 反馈后改对。';
+      feedback.textContent = (correct ? '答对了。' : '还需对照。') + activity.options[index][1].replace(/^对。/, '') + outcome;
       options.forEach((option, i) => option.setAttribute('aria-pressed', String(i === index)));
       again.hidden = false;
     }
-    if (answered?.variant === variant) showAnswer(answered.choice);
+    if (answered?.variant === variant) showAnswer(answered.choice, answered);
     options.forEach((button, index) => button.addEventListener('click', () => {
-      showAnswer(index);
-      const attempt = {id: attemptId, at: Date.now(), variant, choice: index};
+      firstChoice ??= index;
+      const attempt = {id: attemptId, at: Date.now(), variant, choice: index, firstChoice, assisted};
+      showAnswer(index, attempt);
       const known = history.findIndex(item => item.id === attemptId);
       if (known >= 0) history.splice(known, 1);
       history.push(attempt);
@@ -63,14 +74,23 @@ function mountTermReview(entry, record) {
       keepActivityFeedbackVisible(button, feedback);
     }));
     content.querySelector('[data-review-hint]').addEventListener('click', event => {
+      assisted = true;
+      rememberRun();
       delete content.dataset.result;
       feedback.textContent = activity.hint || '先找一条和题目直接有关的记录。还没有把握，可以先回看上面的材料。';
       keepActivityFeedbackVisible(event.currentTarget, feedback);
     });
+    if (typeof bindReviewEvidence === 'function') bindReviewEvidence(entry,
+      content.querySelector('[data-review-evidence]'), () => {
+        assisted = true;
+        rememberRun();
+      });
     again.addEventListener('click', () => {
       if (variants.alternate) variant = variant === 'base' ? 'alternate' : 'base';
       attemptId = makeId();
-      saveActivityField(entry.id, 'reviewRun', { id: attemptId, variant });
+      assisted = false;
+      firstChoice = undefined;
+      rememberRun();
       showAttempt();
       const prompt = content.querySelector('h2');
       prompt.focus({preventScroll: true});

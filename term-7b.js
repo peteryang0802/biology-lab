@@ -192,6 +192,10 @@ globalThis.bioTerms['7b'] = [
             activity: {
               kind: 'project',
               prompt: '你拿到两张虚拟卡，一张经过示意“含颗粒气流”后留下斑点，一张经过洁净气流后基本不变。给模型配一张说明牌。',
+              evidenceRecords: [
+                { label: '虚拟卡甲 · 含颗粒气流', text: '卡片留下可见斑点。本记录没有检验斑点的成分或健康影响。' },
+                { label: '虚拟卡乙 · 洁净气流', text: '卡片基本不变。只记录这张卡片的外观。' },
+              ],
               fields: [
                 { label: '我想比较什么', placeholder: '写出甲和乙的条件，以及哪一个条件会改变。' },
                 { label: '我要固定什么，记录什么', placeholder: '可以从卡片材料、气流量和记录斑点的方法中选。' },
@@ -374,6 +378,10 @@ globalThis.bioTerms['7b'] = [
             activity: {
               kind: 'project',
               prompt: '为模型写两条屏幕消息，区分读取成功和读不到，并定一条保护记录的规则。',
+              evidenceRecords: [
+                { label: '虚拟屏幕记录一 · 正常读出', text: '这次对参考纸卡的读取成功，结果属于当次记录。' },
+                { label: '虚拟屏幕记录二 · 无读数', text: '这次没有测得数值。保留读取失败的状态，让下次仍能复核。' },
+              ],
               fields: [
                 { label: '读数有效时', placeholder: '怎样告诉使用者读数来自哪次模拟记录？' },
                 { label: '参考卡或传感器出错时', placeholder: '写一句这次没读到什么，以及怎样重新操作模型。' },

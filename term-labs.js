@@ -43,6 +43,9 @@ function activityMarkup(activity) {
     }
     case 'project':
       return `${optionalEvidence(activity.rows)}
+        ${activity.evidenceRecords ? `<div class="project-evidence-records" role="group" aria-label="展开项目记录">${activity.evidenceRecords.map(record =>
+          `<details class="more-activity"><summary>${escape(record.label)}</summary><p>${escape(record.text)}</p></details>`,
+        ).join('')}</div>` : ''}
         <div class="activity-fields">
           ${activity.fields.map((field, index) => `<label for="project-field-${index}">${escape(field.label)}
             <textarea id="project-field-${index}" rows="2" maxlength="400" placeholder="${escape(field.placeholder)}" data-draft="${index}"></textarea>

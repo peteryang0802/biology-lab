@@ -72,7 +72,7 @@ function loadTerm(id) {
         resolve(entries);
       } catch (problem) { reject(problem); }
     }
-    script.src = `./term-${id}.js?v=${id === '8b' ? 10 : 9}`;
+    script.src = `./term-${id}.js?v=${id === '8a' ? 9 : 10}`;
     script.onload = () => finish();
     script.onerror = () => finish(new Error('term download'));
     document.head.append(script);
@@ -492,6 +492,7 @@ function renderQuiz(name, activity, photoStation = false) {
     <button type="button" class="action" data-check>核对线索</button>
     <p class="feedback" role="status"></p>
     ${photoStation ? '<button type="button" class="text-control" data-cell-find-evidence hidden></button>' : ''}
+    <button type="button" class="text-control" data-review-evidence hidden>回看本课材料 ↑</button>
   </section>`;
 }
 
@@ -631,6 +632,19 @@ function mountLearningAdditions(entry) {
     const options = [...section.querySelectorAll('[data-answer]')];
     const feedback = section.querySelector('.feedback');
     const evidenceButton = section.querySelector('[data-cell-find-evidence]');
+    const sourceButton = section.querySelector('[data-review-evidence]');
+    const checkedKey = name + 'Checked';
+    const consultationKey = name + 'Consulted';
+    const checkedConsultationKey = name + 'ConsultedWhenChecked';
+    const firstCheckKey = name + 'FirstCorrect';
+    function rememberReview(fields) {
+      const record = { ...state.reviews?.[entry.id], ...fields };
+      state.reviews = { ...state.reviews, [entry.id]: record };
+      saveState();
+    }
+    if (typeof bindReviewEvidence === 'function') {
+      bindReviewEvidence(entry, sourceButton, () => rememberReview({ [consultationKey]: true }));
+    }
     const previous = state.reviews?.[entry.id]?.[name];
     const chosen = new Set(Array.isArray(previous) ? previous.filter(value => options.some(option => option.dataset.answer === value)) : []);
     for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
@@ -649,11 +663,10 @@ function mountLearningAdditions(entry) {
       feedback.textContent = '';
       if (evidenceButton) evidenceButton.hidden = true;
       delete section.dataset.result;
-      const record = { ...state.reviews?.[entry.id], [name]: [...chosen] };
-      if (name === 'transfer') record.transferChecked = false;
-      if (evidenceButton) record.cellEvidenceChecked = false;
-      state.reviews = { ...state.reviews, [entry.id]: record };
-      saveState();
+      rememberReview({
+        [name]: [...chosen], [checkedKey]: false,
+        ...(evidenceButton ? { cellEvidenceChecked: false } : {}),
+      });
     }));
     function check(remember = true) {
       if (!chosen.size || chosen.has('unsure')) {
@@ -662,31 +675,37 @@ function mountLearningAdditions(entry) {
         return;
       }
       const correct = activity.correct.length === chosen.size && activity.correct.every(i => chosen.has(String(i)));
-      const option = Number([...chosen][0]);
+      const selected = [...chosen].map(Number);
+      const option = selected[0];
+      const wrong = selected.filter(index => !activity.correct.includes(index));
+      const remaining = activity.correct.filter(index => !selected.includes(index)).length;
+      const explanation = correct
+        ? activity.feedbackByOption?.[option] ?? activity.explain
+        : wrong.map(index => activity.feedbackByOption?.[index] ?? activity.explain).join(' ')
+          + (activity.correct.length > 1 && remaining ? '还少 ' + remaining + ' 条可配对的记录。' : '');
       const photoUnavailable = evidenceButton && Boolean(outlet.querySelector('.cell-samples [data-image-status="failed"]'));
       const hasPhotoEvidence = evidenceButton && state.cell?.observations?.leaf === 1;
       const qualifier = photoUnavailable ? '照片暂不可见，这次可根据文字记录判断。'
         : correct && evidenceButton && !hasPhotoEvidence ? '选择和记录相符。试着回图指出绿点。' : '';
       section.dataset.result = correct ? 'correct' : 'retry';
       const result = correct ? (qualifier || '答对了。') : '还需对照。' + qualifier;
-      feedback.textContent = result + (activity.feedbackByOption?.[option] ?? activity.explain);
+      const review = state.reviews?.[entry.id];
+      const firstCheck = review?.[firstCheckKey] ?? (remember ? correct : undefined);
+      const consulted = Boolean(review?.[remember ? consultationKey : checkedConsultationKey]);
+      feedback.textContent = result + explanation + (correct && typeof firstCheck === 'boolean'
+        ? consulted ? ' 回看材料后核对正确。' : firstCheck ? ' 首次核对正确。' : ' 反馈后改对。'
+        : '');
       if (evidenceButton) {
         evidenceButton.hidden = false;
         evidenceButton.textContent = ['回看照片比例 ↑', '在照片中找绿点 ↑', '对照细胞结构示意 ↑'][option];
       }
       if (!remember) return;
+      rememberReview({ [checkedKey]: true, [firstCheckKey]: firstCheck, [checkedConsultationKey]: consulted });
       if (name === 'transfer') {
         markReviewAttempt(entry, correct);
-        const record = { ...state.reviews?.[entry.id], transferChecked: true };
-        state.reviews = { ...state.reviews, [entry.id]: record };
-        saveState();
       } else {
-        if (evidenceButton) {
-          const record = { ...state.reviews?.[entry.id], cellEvidenceChecked: true };
-          state.reviews = { ...state.reviews, [entry.id]: record };
-        }
         state.checked = { ...state.checked, [entry.id]: true };
-        if (correct && (!evidenceButton || hasPhotoEvidence)) markPracticed(entry);
+        if (correct && hasPhotoEvidence) markPracticed(entry);
         saveState();
       }
     }
@@ -698,6 +717,7 @@ function mountLearningAdditions(entry) {
         target.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
       evidenceButton.addEventListener('click', () => {
+        rememberReview({ [consultationKey]: true });
         back.hidden = false;
         if (chosen.has('2')) {
           model.open = true;
@@ -715,8 +735,8 @@ function mountLearningAdditions(entry) {
         focusCellEvidence(evidenceButton);
       });
     }
-    if (name === 'transfer' && state.reviews?.[entry.id]?.transferChecked) check(false);
-    if (evidenceButton && state.reviews?.[entry.id]?.cellEvidenceChecked) check(false);
+    if (state.reviews?.[entry.id]?.[checkedKey] ||
+        evidenceButton && state.reviews?.[entry.id]?.cellEvidenceChecked) check(false);
     section.querySelector('[data-check]').addEventListener('click', event => {
       check();
       if (typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(event.currentTarget, feedback);

@@ -28,6 +28,17 @@ details > summary { cursor: pointer; }
 .book-note p + p { margin-top: 6px; }
 .review-jump { font-size: .85rem; padding-inline: 2px; }
 #lesson-review > summary { scroll-margin-top: 11px; }
+.review-evidence-guide {
+  grid-column: 1 / -1;
+  margin: 0 0 8px;
+  padding: 8px 12px 3px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--sage);
+  min-width: 0;
+}
+.review-evidence-guide p { scroll-margin-top: 10px; }
+.project-evidence-records .more-activity { margin: 6px 0; }
+.project-evidence-records .more-activity p { margin-bottom: 10px; }
 .diagram-panel { background: var(--diagram-paper); }
 .diagram-items li[data-focus="true"] { border-block-end-color: var(--selected-line); color: var(--ink); }
 .diagram-items span { font-size: .89rem; overflow-wrap: anywhere; }
