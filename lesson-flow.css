@@ -41,19 +41,39 @@
 
 .lesson-flow .intro .lesson-name { margin-bottom: 4px; }
 .lesson-flow .intro-copy { line-height: 1.55; }
-
-.lesson-flow .flow-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 14px;
-  margin-bottom: clamp(16px, 3vw, 26px);
-  border-block-end: 1px solid var(--flow-rule);
+.lesson-flow .flow-page {
+  margin-top: 5px;
   color: var(--muted);
-  font-size: .84rem;
+  font-size: .82rem;
 }
 
-.lesson-flow .flow-position { margin-inline-end: auto; }
+.site-header .lesson-directory-exit {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline-start: 8px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.site-header .brand:not([href]) .brand-text { text-decoration: none; }
+
+.lesson-flow .flow-layout {
+  border-block-start: 1px solid var(--flow-rule);
+  padding-block-start: 14px;
+}
+.lesson-flow .flow-content { min-width: 0; }
+.lesson-flow .flow-rail {
+  margin-block-end: 12px;
+  color: var(--muted);
+  font-size: .86rem;
+}
+.lesson-flow .flow-rail > h2,
+.lesson-flow .flow-rail > ol { display: none; }
+.lesson-flow .flow-current-label {
+  margin-inline-start: .6em;
+  color: var(--flow-reflection-ink);
+  font-weight: 680;
+}
 .lesson-flow .flow-opening { max-width: 42rem; }
 .lesson-flow .flow-opening > h2 { color: var(--flow-reflection-ink); }
 .lesson-flow .flow-questions {
@@ -119,6 +139,31 @@
   background: transparent;
 }
 .lesson-flow .flow-pane .quiz-head h3 { color: var(--flow-reflection-ink); }
+.lesson-flow .flow-pane [data-quiz]:has([data-check]) .check-options { display: grid; }
+.lesson-flow .flow-pane [data-quiz]:has([data-check]) [data-answer] {
+  display: grid;
+  grid-template-columns: 1rem 1.1rem minmax(0, 1fr);
+  align-items: center;
+  gap: .65rem;
+  padding: 8px 12px;
+}
+.lesson-flow .flow-option-letter { font-size: .8rem; }
+.lesson-flow .flow-option-mark {
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+}
+.lesson-flow [aria-pressed="true"] > .flow-option-mark::after {
+  content: '';
+  width: .28rem;
+  height: .57rem;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
 
 .lesson-flow .flow-pane :is([data-quiz], [data-review-content]) button[aria-pressed="true"] {
   border-color: var(--flow-material-line);
@@ -204,9 +249,8 @@
   gap: 7px 12px;
   margin-top: clamp(15px, 4vw, 26px);
 }
-.lesson-flow .flow-actions:not(:has(.flow-forward:not([hidden]))),
-.lesson-flow .flow-pane:has([data-review-evidence-guide]:not([hidden]), [data-cell-back-to-quiz]:not([hidden])) > .flow-actions,
-.lesson-flow .flow-review-shortcut {
+.lesson-flow .flow-actions:not(:has(> :is(.flow-forward, [data-flow-back]):not([hidden]))),
+.lesson-flow .flow-pane:has([data-review-evidence-guide]:not([hidden]), [data-cell-back-to-quiz]:not([hidden])) > .flow-actions {
   display: none;
 }
 .lesson-flow .flow-actions .action { padding-inline: 16px; }
@@ -223,19 +267,7 @@
   text-decoration: none;
 }
 .lesson-flow .flow-actions a.action:hover { text-decoration: underline; }
-.lesson-flow .flow-course-links {
-  padding-block: 3px;
-  border-block-start: 1px solid var(--flow-rule);
-}
-.lesson-flow .flow-course-links a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  color: var(--accent-deep);
-  text-decoration: underline;
-  text-underline-offset: .19em;
-}
-.lesson-flow .flow-link {
+.lesson-flow .flow-actions button[data-flow-back] {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -243,9 +275,18 @@
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: var(--accent-deep);
+  color: var(--muted);
   text-decoration: underline;
   text-underline-offset: .19em;
+}
+.lesson-flow .flow-actions button[data-flow-back]:hover { color: var(--ink); }
+.lesson-flow .flow-pane:has(.action:not(.flow-forward, :disabled, [hidden], [hidden] *, details:not([open]) *)) > .flow-actions [data-flow-next] {
+  border-color: var(--flow-rule);
+  background: transparent;
+  color: var(--muted);
+}
+.lesson-flow .flow-pane:has(.action:not(.flow-forward, :disabled, [hidden], [hidden] *, details:not([open]) *)) > .flow-actions [data-flow-next]:hover {
+  color: var(--ink);
 }
 
 .lesson-flow .flow-extras,
@@ -260,28 +301,80 @@
 }
 .lesson-flow .flow-book { width: 100%; }
 .lesson-flow .flow-book p { margin-bottom: 8px; }
-.lesson-flow .flow-menu {
-  min-width: 0;
-  max-width: 100%;
-  margin-inline-start: auto;
-}
-.lesson-flow .flow-menu:not([open]) > :not(summary) { display: none; }
-.lesson-flow .flow-menu > :first-child { margin-inline-start: auto; width: fit-content; }
-.lesson-flow .flow-menu > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 11px;
-}
-.lesson-flow :is(.flow-book, .flow-extras, .flow-menu) > summary {
+.lesson-flow :is(.flow-book, .flow-extras) > summary {
   min-height: 44px;
   padding-block: 9px;
   color: var(--accent-deep);
   font-size: .88rem;
   font-weight: 620;
 }
-.lesson-flow :is(.flow-book, .flow-extras, .flow-menu)[open] > summary { margin-bottom: 4px; }
-.lesson-flow .flow-menu :is(ol, ul) { margin: 0 0 8px; padding-inline-start: 1.5em; }
-.lesson-flow .flow-menu [aria-current="step"] { font-weight: 750; }
+.lesson-flow :is(.flow-book, .flow-extras)[open] > summary { margin-bottom: 4px; }
+
+@media (min-width: 900px) and (min-height: 501px) and (orientation: landscape) {
+  main.wrap:has(.lesson-flow),
+  .site-header:has(.lesson-directory-exit:not([hidden])) .wrap {
+    width: min(calc(100% - 32px), 70rem);
+  }
+  main.wrap:has(.lesson-flow) { padding-block-start: 29px; }
+  #lesson .lesson-flow { max-width: 70rem; }
+  .lesson-flow .intro h1 { font-size: clamp(1.9rem, 3.7vw, 2.35rem); }
+  .lesson-flow .flow-layout {
+    display: grid;
+    grid-template-columns: 12.8rem minmax(0, 1fr);
+    padding-block-start: 18px;
+  }
+  .lesson-flow .flow-content {
+    border-inline-start: 1px solid var(--flow-rule);
+    padding-inline-start: clamp(18px, 2.5vw, 32px);
+  }
+  .lesson-flow .flow-rail {
+    position: sticky;
+    inset-block-start: 16px;
+    align-self: start;
+    margin: 0;
+    padding-inline-end: 17px;
+  }
+  .lesson-flow .flow-rail > h2 {
+    display: block;
+    font-size: .94rem;
+    font-weight: 680;
+  }
+  .lesson-flow .flow-rail > ol {
+    display: grid;
+    gap: 3px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lesson-flow .flow-rail li {
+    display: grid;
+    grid-template-columns: 1.4rem minmax(0, 1fr);
+    align-items: center;
+    gap: .5rem;
+    min-height: 39px;
+    border-inline-start: 2px solid transparent;
+    padding: 6px 7px;
+    line-height: 1.32;
+  }
+  .lesson-flow .flow-step-number {
+    display: grid;
+    place-items: center;
+    width: 1.32rem;
+    aspect-ratio: 1;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-size: .7rem;
+    line-height: 1;
+  }
+  .lesson-flow .flow-rail li[aria-current="step"] {
+    border-inline-start-color: var(--flow-reflection-line);
+    border-radius: 6px;
+    color: var(--flow-reflection-ink);
+    background: var(--flow-reflection);
+    font-weight: 720;
+  }
+  .lesson-flow .flow-rail:not([data-flow-detour]) .flow-current-label { display: none; }
+}
 
 @media (min-width: 720px), (max-height: 500px) and (orientation: landscape) {
   .lesson-flow .flow-pane .station > .diagram-panel {
@@ -292,21 +385,19 @@
 
 @media (max-width: 560px) {
   .lesson-flow .intro { margin-bottom: 12px; }
-  .lesson-flow .flow-nav { margin-bottom: 15px; }
   .lesson-flow .flow-pane .controls { padding: 10px; }
   .lesson-flow .flow-pane .check-options { display: grid; }
   .lesson-flow .flow-pane .check-options button { min-width: 0; }
 }
 
 @media (max-height: 465px) and (orientation: landscape) {
-  .lesson-flow .intro,
-  .lesson-flow .flow-nav { margin-bottom: 8px; }
+  .lesson-flow .intro, .lesson-flow .flow-rail { margin-bottom: 8px; }
+  .lesson-flow .flow-layout { padding-block-start: 8px; }
   .lesson-flow .flow-questions li + li { margin-top: 5px; }
   .lesson-flow .flow-actions { margin-top: 11px; }
 }
 
 @media (max-height: 350px) and (orientation: landscape) {
-  .lesson-flow .flow-nav { margin-bottom: 0; }
   .lesson-flow .intro { margin-bottom: 2px; }
   .lesson-flow .flow-actions { margin-top: 6px; }
 }

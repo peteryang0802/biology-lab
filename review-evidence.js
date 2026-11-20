@@ -91,6 +91,10 @@ function textReviewMaterials(entry, question, target) {
     const description = lesson?.stages?.[0]?.description;
     return description ? [description] : [];
   }
+  if (entry.id === 'photosynthesis' && question === 'evidence') {
+    const prompt = globalThis.bioUnitTwo?.photosynthesis?.stages?.[0]?.prompt;
+    return prompt?.split('。').slice(0, 2).map(line => line + '。') ?? [];
+  }
   if (entry.id === '7b-urine-device') {
     return (entry.activity?.evidenceRecords ?? []).map(record => ({
       label: record.label,

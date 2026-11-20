@@ -31,6 +31,8 @@ const state = progress.state;
 const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
 const locationNav = document.querySelector('#course-location');
 const edition = document.querySelector('#edition');
+const brand = document.querySelector('.site-header .brand');
+const directoryExit = document.querySelector('.lesson-directory-exit');
 let routeVersion = 0;
 let renderedLesson = null;
 let resumeReviewId;
@@ -490,7 +492,8 @@ function renderQuiz(name, activity, photoStation = false) {
     <fieldset><legend>${escape(activity.question)}</legend>
       ${multiple ? '<p class="quiz-instruction">选出 ' + activity.correct.length + ' 条线索，再一起核对。</p>' : ''}
       <div class="check-options">${activity.options.map((label, i) =>
-        `<button type="button" data-answer="${i}" aria-pressed="false">${escape(label)}</button>`).join('')}
+        `<button type="button" data-answer="${i}" aria-pressed="false">${multiple
+          ? `<span class="flow-option-mark" aria-hidden="true"></span><span class="flow-option-letter" aria-hidden="true">${String.fromCharCode(65 + i)}</span>` : ''}${escape(label)}</button>`).join('')}
       </div>
     </fieldset>
     ${multiple ? '<button type="button" class="action" data-check disabled>核对线索</button>' : ''}
@@ -906,8 +909,20 @@ function showRecovery({ term, entry, unknown = false } = {}) {
 
 function showLocation(term, inLesson) {
   edition.textContent = term ? '北京版 · ' + term.title : '北京版 · 初中生物';
-  locationNav.hidden = !term;
-  locationNav.innerHTML = term ? `<a href="${inLesson ? termRoute(term.id) : '#/'}">← ${inLesson ? term.title + '目录' : '学期目录'}</a>` : '';
+  const hasLessonExit = Boolean(term && inLesson);
+  edition.hidden = hasLessonExit;
+  directoryExit.hidden = !hasLessonExit;
+  if (hasLessonExit) {
+    directoryExit.href = termRoute(term.id);
+    brand.removeAttribute('href');
+    brand.removeAttribute('aria-label');
+  } else {
+    directoryExit.removeAttribute('href');
+    brand.href = '#/';
+    brand.setAttribute('aria-label', '生物实验台，返回学习入口');
+  }
+  locationNav.hidden = !term || hasLessonExit;
+  locationNav.innerHTML = term && !hasLessonExit ? '<a href="#/">← 学期目录</a>' : '';
 }
 
 function lessonScrollForRoute(lessonId) {

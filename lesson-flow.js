@@ -111,47 +111,52 @@ function mountLessonFlow(entry, resumeReview) {
 
   const frame = document.createElement('div');
   frame.className = 'lesson-flow';
-  const title = intro.querySelector('h1');
-  title.textContent = entry.title;
+  intro.querySelector('h1').textContent = entry.title;
   intro.querySelector('.lesson-name')?.remove();
+  const term = termsById.get(entry.term);
+  intro.querySelector('.eyebrow').textContent = [term?.title, entry.chapter || entry.unit].filter(Boolean).join(' · ');
 
-  const nav = document.createElement('nav');
-  nav.className = 'flow-nav';
-  nav.setAttribute('aria-label', '本课步骤');
-  nav.innerHTML = '<p class="flow-position"></p><details class="flow-menu"><summary>本课步骤</summary><div></div></details>';
-  const position = nav.querySelector('.flow-position');
-  const menu = nav.querySelector('details');
-  const menuItems = menu.querySelector('div');
   const tools = intro.querySelector('.lesson-tools');
   if (tools) {
-    tools.querySelector('details')?.classList.add('flow-book');
-    tools.querySelector('[data-review-jump]')?.classList.add('flow-review-shortcut');
-    menu.append(tools);
+    const book = tools.querySelector('.book-note');
+    if (book) {
+      const bookSummary = book.querySelector('summary');
+      const page = document.createElement('p');
+      page.className = 'flow-page';
+      page.textContent = bookSummary.textContent;
+      intro.append(page);
+      book.classList.add('flow-book');
+      bookSummary.textContent = '翻纸书时看哪里';
+      phases.find(phase => phase.id === 'observe')?.content.push(book);
+    }
+    // The shade experiment still opens review through the original in-lesson hook.
+    tools.hidden = true;
   }
 
-  const catalog = document.querySelector('#course-location a');
+  const layout = document.createElement('div');
+  layout.className = 'flow-layout';
+  const rail = document.createElement('aside');
+  rail.className = 'flow-rail';
+  rail.setAttribute('aria-label', '本课进度');
+  rail.innerHTML = '<h2>本课进度</h2><p class="flow-position"><span></span><span class="flow-current-label"></span></p><ol role="list"></ol>';
+  const position = rail.querySelector('.flow-position > span');
+  const currentLabel = rail.querySelector('.flow-current-label');
+  const progressList = rail.querySelector('ol');
+  const content = document.createElement('div');
+  content.className = 'flow-content';
+  layout.append(rail, content);
+  frame.append(intro, layout);
+
   const courseLinks = outlet.querySelector('.lesson-next');
-  const previousLesson = courseLinks?.querySelector('.previous-lesson');
   const nextLesson = courseLinks?.querySelector('.next-lesson');
   const nextTitle = nextLesson?.querySelector('strong')?.textContent.trim();
   const nextLabel = !nextLesson ? '' : nextLesson.hash.startsWith('#/term/')
     ? '回到本册目录' : `下一课 · ${nextTitle}`;
-  const courseMenu = document.createElement('div');
-  courseMenu.className = 'flow-course-links';
-  const destinations = new Set();
-  for (const link of [catalog, previousLesson, nextLesson]) {
-    if (!link || destinations.has(link.href)) continue;
-    destinations.add(link.href);
-    const copy = link.cloneNode(false);
-    copy.textContent = link === nextLesson ? nextLabel : link.textContent.trim().replace(/^←\s*/, '');
-    courseMenu.append(copy);
-  }
-  if (courseMenu.childElementCount) menu.append(courseMenu);
+  courseLinks?.remove();
   outlet.prepend(frame);
-  frame.append(intro, nav);
 
   let current;
-  const tabs = [];
+  let mainStep;
   const taskSelector = '[data-quiz], [data-review-content]';
   function syncForward(phase) {
     if (!phase.forward) return;
@@ -164,27 +169,28 @@ function mountLessonFlow(entry, resumeReview) {
         : tasks.some(task => task.dataset.taskOutcome === 'retry') ? 'retry' : 'ready';
     }
   }
-  function stepTo(phase, moveFocus = true, remember = true) {
+  function stepTo(phase, { focus = true, remember = true, temporary = false } = {}) {
     if (!phase) return;
     if (current && current !== phase) playingPrompt?.stop();
     current = phase;
-    for (const item of phases) item.pane.hidden = item !== phase;
-    tabs.forEach((button, index) => {
-      if (phases[index] === phase) button.setAttribute('aria-current', 'step');
-      else button.removeAttribute('aria-current');
-    });
-    const step = phases.indexOf(phase);
-    position.textContent = step === 0 ? '' : `第 ${step} / ${phases.length - 1} 步 · ${phase.label}`;
-    position.hidden = step === 0;
+    if (!temporary || !mainStep) mainStep = phase;
+    for (const item of phases) {
+      item.pane.hidden = item !== phase;
+      if (item === mainStep) item.marker.setAttribute('aria-current', 'step');
+      else item.marker.removeAttribute('aria-current');
+    }
+    rail.toggleAttribute('data-flow-detour', temporary);
+    position.textContent = `第 ${phases.indexOf(mainStep) + 1} / ${phases.length} 步`;
+    currentLabel.textContent = temporary ? '回看材料' : mainStep.label;
     if (review) review.open = phase.id === 'review';
     syncForward(phase);
-    menu.open = false;
     if (remember) saveActivityField(entry.id, 'flowStage', phase.id);
-    if (moveFocus) {
+    if (focus) {
       const heading = phase.pane.querySelector('h2,h3') || phase.pane;
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
-      heading.scrollIntoView({ block: 'start', behavior: 'instant' });
+      if (innerHeight <= 500) layout.scrollIntoView({ block: 'start', behavior: 'instant' });
+      else window.scrollTo({ top: 0, behavior: 'instant' });
     }
   }
 
@@ -202,7 +208,7 @@ function mountLessonFlow(entry, resumeReview) {
     if (next) {
       const forward = document.createElement('button');
       forward.type = 'button';
-      forward.className = index === 0 ? 'action flow-forward' : 'flow-link flow-forward';
+      forward.className = 'flow-forward';
       forward.dataset.flowNext = next.id;
       forward.textContent = next.action + ' →';
       forward.addEventListener('click', () => stepTo(next));
@@ -216,16 +222,28 @@ function mountLessonFlow(entry, resumeReview) {
       actions.append(forward);
       phase.forward = forward;
     }
+    const previous = phases[index - 1];
+    if (previous) {
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.dataset.flowBack = previous.id;
+      back.textContent = '← 上一步';
+      back.addEventListener('click', () => stepTo(previous));
+      actions.append(back);
+    }
     pane.append(actions);
-    frame.append(pane);
-    const tab = document.createElement('button');
-    tab.type = 'button';
-    tab.className = 'flow-link';
-    tab.dataset.flowGo = phase.id;
-    tab.textContent = phase.label;
-    tab.addEventListener('click', () => stepTo(phase));
-    tabs.push(tab);
-    menuItems.append(tab);
+    content.append(pane);
+
+    const marker = document.createElement('li');
+    const number = document.createElement('span');
+    number.className = 'flow-step-number';
+    number.setAttribute('aria-hidden', 'true');
+    number.textContent = index + 1;
+    const label = document.createElement('span');
+    label.textContent = phase.label;
+    marker.append(number, label);
+    phase.marker = marker;
+    progressList.append(marker);
   });
 
   // Keep original mounted exercises and draft fields in place within their new pane.
@@ -234,7 +252,10 @@ function mountLessonFlow(entry, resumeReview) {
 
   frame.addEventListener('bio-show-pane', event => {
     const phase = phases.find(item => item.pane === event.target);
-    if (phase && phase !== current) stepTo(phase, false, !event.detail?.temporary);
+    if (phase && phase !== current) {
+      const temporary = Boolean(event.detail?.temporary);
+      stepTo(phase, { focus: false, remember: !temporary, temporary });
+    }
   });
   frame.addEventListener('bio-task-state', event => {
     const outcome = event.detail?.outcome;
@@ -248,7 +269,6 @@ function mountLessonFlow(entry, resumeReview) {
   const saved = state.activities?.[entry.id]?.flowStage;
   const restored = phases.find(phase => phase.id === saved);
   const previousReview = resumeReview ? reviewPhase : null;
-  stepTo(restored ?? previousReview ?? phases[0], false, !restored && Boolean(previousReview));
-  if (catalog) catalog.closest('nav').hidden = true;
+  stepTo(restored ?? previousReview ?? phases[0], { focus: false, remember: !restored && Boolean(previousReview) });
   return true;
 }
