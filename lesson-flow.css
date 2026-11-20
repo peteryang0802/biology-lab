@@ -1,7 +1,17 @@
-/* One calm reading surface. The illustration, feedback and controls each
-   keep a distinct shape, even when the device uses a dark color scheme. */
+/* Use the same quiet palette for the same reading task throughout a lesson. */
 #lesson .lesson-flow {
-  --flow-material: #edf2e9;
+  --flow-material: #e8f1fb;
+  --flow-material-ink: #244a70;
+  --flow-material-line: #4f7ba8;
+  --flow-reflection: #f1eaf6;
+  --flow-reflection-ink: #563e70;
+  --flow-reflection-line: #8867a7;
+  --flow-success: #e6f2e7;
+  --flow-success-ink: #1e563d;
+  --flow-success-line: #478161;
+  --flow-retry: #fbefdd;
+  --flow-retry-ink: #7a410f;
+  --flow-retry-line: #a7662b;
   --flow-rule: var(--border);
   max-width: 54rem;
   margin-inline: auto;
@@ -45,6 +55,7 @@
 
 .lesson-flow .flow-position { margin-inline-end: auto; }
 .lesson-flow .flow-opening { max-width: 42rem; }
+.lesson-flow .flow-opening > h2 { color: var(--flow-reflection-ink); }
 .lesson-flow .flow-questions {
   margin: 8px 0 0;
   padding: 0 0 0 1.65em;
@@ -54,7 +65,7 @@
 .lesson-flow .flow-questions li { padding-inline-start: .2em; }
 .lesson-flow .flow-questions li + li { margin-top: 10px; }
 .lesson-flow .flow-questions li::marker {
-  color: var(--accent-deep);
+  color: var(--flow-reflection-ink);
   font-size: .83em;
   font-weight: 650;
 }
@@ -82,8 +93,13 @@
   background: transparent;
 }
 
-.lesson-flow .flow-pane .diagram-panel { background: var(--flow-material); }
-.lesson-flow .flow-pane .diagram-panel figcaption { color: var(--muted); }
+.lesson-flow .flow-pane :is(.diagram-panel, .review-evidence-guide, .activity-display > li, .project-evidence-records > details, .shade-reading) {
+  background: var(--flow-material);
+}
+.lesson-flow .flow-pane :is(.diagram-panel figcaption, .review-evidence-guide, .shade-reading small, [data-review-evidence]) {
+  color: var(--flow-material-ink);
+}
+.lesson-flow .flow-pane .review-evidence-guide { border-inline-start-color: var(--flow-material-line); }
 .lesson-flow .flow-pane .station > .diagram-panel { border-block-end: 1px solid var(--flow-rule); }
 .lesson-flow .flow-pane .controls { background: var(--surface); }
 
@@ -102,10 +118,44 @@
   border-radius: 0;
   background: transparent;
 }
+.lesson-flow .flow-pane .quiz-head h3 { color: var(--flow-reflection-ink); }
+
+.lesson-flow .flow-pane :is([data-quiz], [data-review-content]) button[aria-pressed="true"] {
+  border-color: var(--flow-material-line);
+  box-shadow: inset 0 0 0 1px var(--flow-material-line);
+  background: var(--flow-material);
+  color: var(--flow-material-ink);
+}
+
+.lesson-flow .flow-pane :is([data-quiz], [data-review-content])[data-result] {
+  --answer-fill: var(--flow-retry);
+  --answer-ink: var(--flow-retry-ink);
+  --answer-line: var(--flow-retry-line);
+}
+.lesson-flow .flow-pane :is([data-quiz], [data-review-content])[data-result="correct"] {
+  --answer-fill: var(--flow-success);
+  --answer-ink: var(--flow-success-ink);
+  --answer-line: var(--flow-success-line);
+}
+.lesson-flow .flow-pane :is([data-quiz], [data-review-content])[data-result] > :is(.feedback, .activity-feedback):not(:empty) {
+  border-inline-start-color: var(--answer-line);
+  background: var(--answer-fill);
+  color: var(--answer-ink);
+}
+/* A partial multi-select answer is not a verdict on each selected record. */
+.lesson-flow .flow-pane :is([data-quiz][data-result="correct"], [data-quiz][data-result="retry"]:not(:has([data-check])), [data-review-content][data-result]) button[aria-pressed="true"] {
+  border-color: var(--answer-line);
+  box-shadow: inset 0 0 0 1px var(--answer-line);
+  background: var(--answer-fill);
+  color: var(--answer-ink);
+}
+
 .lesson-flow .flow-pane .concept-summary {
   margin: 0 0 14px;
   border-inline-start-width: 2px;
-  background: transparent;
+  border-inline-start-color: var(--flow-reflection-line);
+  background: var(--flow-reflection);
+  color: var(--flow-reflection-ink);
 }
 .lesson-flow .flow-pane .review-note { margin-top: 12px; }
 .lesson-flow .flow-pane > .intro-copy { margin: 0 0 10px; }
@@ -129,7 +179,7 @@
   display: block;
   min-height: 12px;
   border-inline-start: 2px solid var(--accent-deep);
-  background: var(--flow-material);
+  background: var(--surface);
 }
 .lesson-flow .flow-reading-track i {
   display: block;
@@ -262,5 +312,18 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  #lesson .lesson-flow { --flow-material: #202e28; }
+  #lesson .lesson-flow {
+    --flow-material: #21364a;
+    --flow-material-ink: #c0dfff;
+    --flow-material-line: #75a3d3;
+    --flow-reflection: #31283e;
+    --flow-reflection-ink: #e0c8f9;
+    --flow-reflection-line: #aa8cce;
+    --flow-success: #263c30;
+    --flow-success-ink: #c5ead3;
+    --flow-success-line: #7abb98;
+    --flow-retry: #493425;
+    --flow-retry-ink: #ffddad;
+    --flow-retry-line: #e8a96b;
+  }
 }
