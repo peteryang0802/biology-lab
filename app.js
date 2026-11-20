@@ -26,7 +26,7 @@ const pendingTerms = new Map();
 const storageKey = 'bio-learning-lab:v1';
 const backupSizeLimit = 2 * 1024 * 1024;
 const progress = typeof createProgressStore === 'function'
-  ? createProgressStore(storageKey, cleanState) : temporaryProgressStore();
+  ? createProgressStore(storageKey, cleanState, 'school-parent:reset:biology') : temporaryProgressStore();
 const state = progress.state;
 const lessonData = { ...globalThis.bioUnitOne, ...globalThis.bioUnitTwo };
 const locationNav = document.querySelector('#course-location');

@@ -145,13 +145,21 @@ function progressDelta(before, after) {
   return { before: oldFields, after: changedFields };
 }
 
-function createProgressStore(key, sanitize) {
+function createProgressStore(key, sanitize, resetKey) {
   const queuePrefix = `${key}:pending:`;
   const writer = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
   const locks = globalThis.navigator?.locks;
   let sequence = 0;
   let flushing = false;
   let flushAgain = false;
+  let resetAtOpen = null;
+  try { resetAtOpen = resetKey && localStorage.getItem(resetKey); } catch {}
+
+  function canWrite() {
+    if (!resetKey) return true;
+    const reset = localStorage.getItem(resetKey);
+    return reset === resetAtOpen && !reset?.startsWith('pending:');
+  }
 
   function loadBase() {
     const value = localStorage.getItem(key);
@@ -207,11 +215,13 @@ function createProgressStore(key, sanitize) {
     // Every tab persists its own operation before asking to update the legacy snapshot.
     // The lock serializes snapshot writes while the operation remains recoverable if a tab closes.
     locks.request(key, () => {
+      if (!canWrite()) return;
       const queued = readQueue();
       if (!queued.length) return;
       const base = loadBase();
       const value = mergeQueue(base, queued);
       const applied = [...new Set([...base.applied, ...queued.map(operation => operation.name)])].slice(-128);
+      if (!canWrite()) return;
       localStorage.setItem(key, JSON.stringify({ ...value, __progressWrites: applied }));
       for (const operation of queued) localStorage.removeItem(operation.name);
     }).catch(() => {
@@ -226,6 +236,7 @@ function createProgressStore(key, sanitize) {
   }
 
   function queueWrite(before, after) {
+    if (!canWrite()) return;
     if (!locks) {
       const merged = applyProgressChanges(before, after, load());
       localStorage.setItem(key, JSON.stringify(merged));
