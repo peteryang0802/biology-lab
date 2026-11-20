@@ -5,6 +5,7 @@ const firstBook = document.querySelector('#first-book').content;
 const route = id => '#/lesson/' + id;
 const termRoute = id => '#/term/' + id;
 const fairComparisonRoute = '#/challenge/fair-comparison';
+const fairComparisonFromHome = `${fairComparisonRoute}?from=home`;
 const terms = [
   { id: '7a', title: '七年级上册', theme: '认识生命 · 营养和运输', count: 14 },
   { id: '7b', title: '七年级下册', theme: '呼吸、排泄与生命活动调节', count: 14 },
@@ -227,9 +228,7 @@ function renderCatalogue(entries, firstToStudy) {
       <h3>${escape(chapter)}</h3>
       ${list.map(entry => `<a href="${route(entry.id)}" data-entry-id="${entry.id}" ${entry.project ? 'data-project' : ''} ${entry === firstToStudy ? 'data-directory-start' : ''}>
         <span>${escape(entry.title)}${entry.project ? ' <small>项目实践</small>' : ''}</span><small class="directory-status"></small><span class="chapter-page">第 ${entry.page} 页</span>
-      </a>${entry.id === 'research-methods' ? `<a href="${fairComparisonRoute}" class="fair-entry" data-fair-entry>
-        <span>哪两组能公平比较？</span><small>选做闯关</small>
-      </a>` : ''}`).join('')}
+      </a>`).join('')}
     </div>`).join('')}
   </section>`).join('');
 }
@@ -864,6 +863,12 @@ function downloadProgress() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function fairComparisonEntry(href) {
+  return `<a class="fair-entry" href="${href}" data-fair-entry>
+    <span>课后闯关</span><strong>哪两组能公平比较？</strong><span aria-hidden="true">→</span>
+  </a>`;
+}
+
 function renderHome() {
   document.title = '生物实验台 · 北京版初中生物';
   const lastTerm = termsById.get(termForLesson(state.last));
@@ -878,6 +883,7 @@ function renderHome() {
     </a></nav>` : `<nav class="lesson-next hub-resume" aria-label="开始观察"><a class="next-lesson" href="${route('life-traits')}" data-start-lesson>
       <span><small>七年级上册 · 生物的特征</small><strong>看豆种前后的变化</strong></span><span aria-hidden="true">→</span>
     </a></nav>`}
+    ${fairComparisonEntry(fairComparisonFromHome)}
     <h2 class="term-picker-title">按学期找课</h2>
     <div class="term-grid" aria-label="四册课本">
       ${terms.map(term => `<a href="${termRoute(term.id)}" class="term-card">
@@ -942,6 +948,7 @@ function renderTerm(term, entries) {
       <h1 id="lesson-title" tabindex="-1">${term.title}</h1>
       <p class="intro-copy">${term.theme}</p>
     </header>
+    ${term.id === '7a' ? fairComparisonEntry(fairComparisonRoute) : ''}
     <div class="directory-layout">
       <aside class="directory-overview" aria-label="本册学习概况">
         <h2>本册目录</h2><p>${entries.length} 项学习内容</p>
@@ -1023,6 +1030,14 @@ function restoreDirectoryPosition(term, lesson) {
   return true;
 }
 
+function restoreFairEntry() {
+  const link = outlet.querySelector('[data-fair-entry]');
+  if (!link) return false;
+  link.focus({ preventScroll: true });
+  scrollTo(0, 0);
+  return true;
+}
+
 async function render(focus = false) {
   const version = ++routeVersion;
   const previousLesson = renderedLesson;
@@ -1040,15 +1055,22 @@ async function render(focus = false) {
     resumeReviewId === lessonId && state.reviewOpen?.[lessonId] === true));
   resumeReviewId = undefined;
   playingPrompt?.stop();
-  if (hash === fairComparisonRoute) {
+  const challengeFromHome = hash === fairComparisonFromHome;
+  if (hash === fairComparisonRoute || challengeFromHome) {
     showingFairComparison = true;
     showLocation(termsById.get('7a'), true);
+    const returnHref = challengeFromHome ? '#/' : termRoute('7a');
+    const returnLabel = challengeFromHome ? '回到首页' : '回到七上目录';
+    directoryExit.href = returnHref;
+    directoryExitLabel.textContent = returnLabel;
     document.title = '哪两组能公平比较？ · 生物实验台';
     outlet.innerHTML = '<section class="load-panel"><h1 id="lesson-title" tabindex="-1">哪两组能公平比较？</h1><p role="status">正在准备闯关题目……</p></section>';
     try {
-      const { mountFairComparison } = await import('./fair-comparison.js?v=1');
+      const { mountFairComparison } = await import('./fair-comparison.js?v=2');
       if (routeVersion !== version) return;
       unmountFairComparison = mountFairComparison(outlet, {
+        returnHref,
+        returnLabel,
         read() {
           progress.refresh();
           return state.activities?.['research-methods']?.fairComparison;
@@ -1070,6 +1092,7 @@ async function render(focus = false) {
   showLocation(term, Boolean(lessonId));
   if (!hash || hash === '#/' || hash === '#lesson' || hash === '#directory') {
     renderHome();
+    if (focus && returningFromFairComparison && restoreFairEntry()) return;
   } else if (!term) {
     showRecovery({ unknown: true });
   } else {
@@ -1083,12 +1106,7 @@ async function render(focus = false) {
       if (routeVersion !== version) return;
       if (!lessonId) {
         renderTerm(term, entries);
-        if (focus && returningFromFairComparison && term.id === '7a') {
-          const link = outlet.querySelector('[data-fair-entry]');
-          link.focus({ preventScroll: true });
-          link.scrollIntoView({ block: 'center', behavior: 'instant' });
-          return;
-        }
+        if (focus && returningFromFairComparison && term.id === '7a' && restoreFairEntry()) return;
         if (focus && previousLesson?.term === term.id && restoreDirectoryPosition(term, previousLesson)) return;
       } else {
         entry = entriesById.get(lessonId);

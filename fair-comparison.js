@@ -1,6 +1,5 @@
 import { fairComparisonBank } from './fair-comparison-bank.js?v=1';
 
-const directory = '#/term/7a';
 const duration = 30_000;
 const finalQuestion = fairComparisonBank.at(-1);
 const escape = value => String(value).replace(/[&<>"']/g, token => ({
@@ -52,7 +51,7 @@ function materialCard(material) {
   return `<section class="fair-material" aria-label="同屏材料"><h2>${escape(material.title)}</h2><p>${escape(material.note)}</p>${table}</section>`;
 }
 
-export function mountFairComparison(root, {read, write}) {
+export function mountFairComparison(root, {read, write, returnHref, returnLabel}) {
   const controller = new AbortController();
   const {signal} = controller;
   let state = cleanRun(read());
@@ -177,7 +176,7 @@ export function mountFairComparison(root, {read, write}) {
       ${target ? `<p class="fair-summary-next">${pointFor(target) ? '再换一道新材料，看看这个方法能不能用到另一件事。' : `用新材料再试「${escape(target.topic)}」。首答正确可补 1 分。`}</p>
         <button type="button" class="action" data-fair-verify>试一道新材料</button>`
         : `<p class="fair-summary-next">${points < fairComparisonBank.length ? '看一看哪些知识还需要练习。' : '新材料验证也完成了。'}</p>
-           <a class="action" href="${directory}">回到本册目录</a>`}
+           <a class="action" href="${escape(returnHref)}">${escape(returnLabel)}</a>`}
       <details class="fair-summary"><summary>查看这 10 题的记录</summary><ol>${results}</ol></details>`);
   }
 
