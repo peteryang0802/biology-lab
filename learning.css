@@ -75,6 +75,10 @@ details > summary { cursor: pointer; }
 .learning-zone { margin-top: 20px; }
 .learning-zone .outside { margin-top: 11px; color: var(--muted); }
 .review-note { margin: 6px 0 0; padding-block: 9px; border-block-start: 1px solid var(--border); }
+.review-note > summary { min-height: 44px; align-content: center; color: var(--accent-deep); }
+.review-note[open] > summary { margin-bottom: 8px; }
+.lesson-flow .flow-pane > #lesson-review[open] > summary { display: none; }
+.lesson-flow [data-quiz-hint], .lesson-flow [data-review-evidence] { padding-inline: 0; }
 .review-note label { font-size: .91rem; margin-bottom: 4px; }
 .review-note label small { color: var(--muted); margin-inline-start: .35em; }
 .review-note textarea {

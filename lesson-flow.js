@@ -1,8 +1,10 @@
 'use strict';
 
-function showLessonFlowFor(target) {
+function showLessonFlowFor(target, { temporary = false } = {}) {
   const pane = target?.closest('.flow-pane');
-  if (pane?.hidden) pane.dispatchEvent(new Event('bio-show-pane', { bubbles: true }));
+  if (pane?.hidden) {
+    pane.dispatchEvent(new CustomEvent('bio-show-pane', { bubbles: true, detail: { temporary } }));
+  }
 }
 
 function flowDisclosure(label, elements) {
@@ -80,7 +82,7 @@ function buildLessonPanes(root, entry) {
     if (!project) add('compare', '再观察', '换份材料看一看', [sample]);
     add('reason', '用证据判断', '用证据答一答', [evidence, extraEvidence]);
   }
-  add('review', '回顾和再试', '回看刚才的问题', [summary, review,
+  add('review', '回顾和再试', review ? '换个例子再试' : '回顾本课', [summary, review,
     extras.some(Boolean) ? flowDisclosure('课后还能试一试', extras.filter(Boolean)) : null]);
   if (!phases.length) return null;
   return { intro, phases, review };
@@ -123,15 +125,45 @@ function mountLessonFlow(entry, resumeReview) {
   const tools = intro.querySelector('.lesson-tools');
   if (tools) {
     tools.querySelector('details')?.classList.add('flow-book');
+    tools.querySelector('[data-review-jump]')?.classList.add('flow-review-shortcut');
     menu.append(tools);
   }
 
-  const nextLesson = outlet.querySelector('.lesson-next');
+  const catalog = document.querySelector('#course-location a');
+  const courseLinks = outlet.querySelector('.lesson-next');
+  const previousLesson = courseLinks?.querySelector('.previous-lesson');
+  const nextLesson = courseLinks?.querySelector('.next-lesson');
+  const nextTitle = nextLesson?.querySelector('strong')?.textContent.trim();
+  const nextLabel = !nextLesson ? '' : nextLesson.hash.startsWith('#/term/')
+    ? '回到本册目录' : `下一课 · ${nextTitle}`;
+  const courseMenu = document.createElement('div');
+  courseMenu.className = 'flow-course-links';
+  const destinations = new Set();
+  for (const link of [catalog, previousLesson, nextLesson]) {
+    if (!link || destinations.has(link.href)) continue;
+    destinations.add(link.href);
+    const copy = link.cloneNode(false);
+    copy.textContent = link === nextLesson ? nextLabel : link.textContent.trim().replace(/^←\s*/, '');
+    courseMenu.append(copy);
+  }
+  if (courseMenu.childElementCount) menu.append(courseMenu);
   outlet.prepend(frame);
   frame.append(intro, nav);
 
   let current;
   const tabs = [];
+  const taskSelector = '[data-quiz], [data-review-content]';
+  function syncForward(phase) {
+    if (!phase.forward) return;
+    const tasks = Array.from(phase.pane.querySelectorAll(taskSelector));
+    const ready = tasks.every(task => task.dataset.taskOutcome === 'correct');
+    phase.forward.hidden = !ready;
+    if (tasks.length) {
+      phase.forward.className = ready ? 'action flow-forward' : 'flow-forward';
+      phase.pane.dataset.flowOutcome = ready ? 'correct'
+        : tasks.some(task => task.dataset.taskOutcome === 'retry') ? 'retry' : 'ready';
+    }
+  }
   function stepTo(phase, moveFocus = true, remember = true) {
     if (!phase) return;
     if (current && current !== phase) playingPrompt?.stop();
@@ -145,6 +177,7 @@ function mountLessonFlow(entry, resumeReview) {
     position.textContent = step === 0 ? '' : `第 ${step} / ${phases.length - 1} 步 · ${phase.label}`;
     position.hidden = step === 0;
     if (review) review.open = phase.id === 'review';
+    syncForward(phase);
     menu.open = false;
     if (remember) saveActivityField(entry.id, 'flowStage', phase.id);
     if (moveFocus) {
@@ -169,20 +202,19 @@ function mountLessonFlow(entry, resumeReview) {
     if (next) {
       const forward = document.createElement('button');
       forward.type = 'button';
-      forward.className = index === 0 ? 'action' : 'flow-link';
+      forward.className = index === 0 ? 'action flow-forward' : 'flow-link flow-forward';
       forward.dataset.flowNext = next.id;
       forward.textContent = next.action + ' →';
       forward.addEventListener('click', () => stepTo(next));
       actions.append(forward);
-    }
-    if (index) {
-      const back = document.createElement('button');
-      back.type = 'button';
-      back.className = 'flow-link';
-      back.dataset.flowBack = phases[index - 1].id;
-      back.textContent = index === 1 ? '← 回看开场问题' : '← 上一步';
-      back.addEventListener('click', () => stepTo(phases[index - 1]));
-      actions.append(back);
+      phase.forward = forward;
+    } else if (nextLesson) {
+      const forward = nextLesson.cloneNode(false);
+      forward.className = 'action flow-forward';
+      forward.dataset.flowFinish = '';
+      forward.textContent = nextLabel + ' →';
+      actions.append(forward);
+      phase.forward = forward;
     }
     pane.append(actions);
     frame.append(pane);
@@ -195,7 +227,6 @@ function mountLessonFlow(entry, resumeReview) {
     tabs.push(tab);
     menuItems.append(tab);
   });
-  if (nextLesson) frame.append(nextLesson);
 
   // Keep original mounted exercises and draft fields in place within their new pane.
   // Empty structural containers are left outside the flow and hidden.
@@ -203,11 +234,21 @@ function mountLessonFlow(entry, resumeReview) {
 
   frame.addEventListener('bio-show-pane', event => {
     const phase = phases.find(item => item.pane === event.target);
-    if (phase && phase !== current) stepTo(phase, false);
+    if (phase && phase !== current) stepTo(phase, false, !event.detail?.temporary);
+  });
+  frame.addEventListener('bio-task-state', event => {
+    const outcome = event.detail?.outcome;
+    if (!['ready', 'retry', 'correct'].includes(outcome) || !event.target.matches(taskSelector)) return;
+    const phase = phases.find(item => item.pane.contains(event.target));
+    if (!phase) return;
+    event.target.dataset.taskOutcome = outcome;
+    syncForward(phase);
   });
 
   const saved = state.activities?.[entry.id]?.flowStage;
   const restored = phases.find(phase => phase.id === saved);
-  stepTo(restored ?? (resumeReview ? reviewPhase : null) ?? phases[0], false, false);
+  const previousReview = resumeReview ? reviewPhase : null;
+  stepTo(restored ?? previousReview ?? phases[0], false, !restored && Boolean(previousReview));
+  if (catalog) catalog.closest('nav').hidden = true;
   return true;
 }

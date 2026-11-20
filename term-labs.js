@@ -229,7 +229,6 @@ function mountTermActivity(entry, replaceActivity) {
   if (typeof mountExtraLab === 'function') {
     mountExtraLab(host, entry, record, () => saveActivityField(entry.id, 'visualLab', record.visualLab));
   }
-  mountTermAudio(host, entry);
   if (replaceActivity) {
     paintActivityArt(host);
   } else if (activity.kind === 'switch') {
@@ -310,8 +309,7 @@ function renderTermLesson(entry) {
     <p>${escape(entry.safety)}</p>
     ${entry.source ? `<a href="${escape(entry.source.url)}" target="_blank" rel="noopener noreferrer">${escape(entry.source.label)} ↗</a>` : ''}</aside>` : '';
   outlet.innerHTML = intro(entry, entry.question, entry.intro) + safety + `<section class="term-activity" data-term-activity data-kind="${activity.kind}" aria-labelledby="activity-prompt">
-    <header class="term-activity-head"><h2 id="activity-prompt">${escape(extra && extraPrompts[entry.id] || activity.prompt)}</h2>
-    ${renderTermAudio()}</header>
+    <header class="term-activity-head"><h2 id="activity-prompt">${escape(extra && extraPrompts[entry.id] || activity.prompt)}</h2></header>
     ${activity.kind === 'project' ? '' : '<p class="activity-caption">教学示意</p>'}
     ${renderBreathingPrediction(entry)}
     ${typeof renderEyeBench === 'function' ? renderEyeBench(entry) : ''}

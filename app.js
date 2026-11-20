@@ -214,12 +214,17 @@ function markPracticed(entry) {
 
 function markReviewAttempt(entry, correct) {
   const note = outlet.querySelector('[data-review-note]');
-  if (note) note.hidden = false;
+  if (note && correct) note.hidden = false;
   const reviewed = state.reviewed ?? {};
   const outcome = reviewed[entry.id] === true || correct === true;
   if (reviewed[entry.id] === outcome) return;
   state.reviewed = { ...reviewed, [entry.id]: outcome };
   saveState();
+}
+
+function showQuizOutcome(quiz, outcome) {
+  quiz.dataset.taskOutcome = outcome;
+  quiz.dispatchEvent(new CustomEvent('bio-task-state', { bubbles: true, detail: { outcome } }));
 }
 
 const diagramBestChoices = {
@@ -479,20 +484,20 @@ function renderDiagramLesson(entry, data) {
 
 function renderQuiz(name, activity, photoStation = false) {
   const title = name === 'evidence' ? '从材料里找线索' : '换个例子再试';
+  const multiple = activity.correct.length > 1;
   return `<section class="quick-check" data-quiz="${name}" aria-labelledby="${name}-title">
-    <header class="quiz-head"><h3 id="${name}-title">${title}</h3>
-      ${name === 'evidence' ? '<button type="button" class="text-control" data-listen>听题</button><span class="audio-feedback" role="status"></span>' : ''}
-    </header>
+    <header class="quiz-head"><h3 id="${name}-title">${title}</h3></header>
     <fieldset><legend>${escape(activity.question)}</legend>
-      ${activity.correct.length > 1 ? '<p class="quiz-instruction">可以选多条线索。</p>' : ''}
+      ${multiple ? '<p class="quiz-instruction">选出 ' + activity.correct.length + ' 条线索，再一起核对。</p>' : ''}
       <div class="check-options">${activity.options.map((label, i) =>
         `<button type="button" data-answer="${i}" aria-pressed="false">${escape(label)}</button>`).join('')}
-      <button type="button" data-answer="unsure" aria-pressed="false">我还不确定</button></div>
+      </div>
     </fieldset>
-    <button type="button" class="action" data-check>核对线索</button>
-    <p class="feedback" role="status"></p>
+    ${multiple ? '<button type="button" class="action" data-check disabled>核对线索</button>' : ''}
+    <p class="feedback" role="status" tabindex="-1"></p>
     ${photoStation ? '<button type="button" class="text-control" data-cell-find-evidence hidden></button>' : ''}
-    <button type="button" class="text-control" data-review-evidence hidden>回看本课材料 ↑</button>
+    <button type="button" class="text-control" data-review-evidence hidden>先看线索</button>
+    <button type="button" class="text-control" data-quiz-hint hidden>给一点提示</button>
   </section>`;
 }
 
@@ -556,13 +561,13 @@ function mountEvidenceChallenge(entry) {
 }
 
 function renderReviewNote(entry) {
-  const visible = typeof state.notes?.[entry.id] === 'string' && state.notes[entry.id].trim() ||
-    Object.hasOwn(state.reviewed ?? {}, entry.id);
-  return `<div class="review-note" data-review-note ${visible ? '' : 'hidden'}>
-    <label for="evidence-note">用自己的话说说线索 <small>可选</small></label>
+  const hasNote = typeof state.notes?.[entry.id] === 'string' && state.notes[entry.id].trim();
+  return `<details class="review-note" data-review-note ${hasNote ? 'open' : state.reviewed?.[entry.id] === true ? '' : 'hidden'}>
+    <summary>写一句我的理由（可选）</summary>
+    <label class="sr-only" for="evidence-note">用自己的话说说线索</label>
     <textarea id="evidence-note" rows="2" maxlength="400" placeholder="我看到……，所以我暂时认为……"></textarea>
     <p class="note-status" role="status"></p>
-  </div>`;
+  </details>`;
 }
 
 function setupLessonReview(entry, restorePosition) {
@@ -594,8 +599,10 @@ function setupLessonReview(entry, restorePosition) {
   }
 
   function scrollToReview() {
-    summary.scrollIntoView({ block: 'start', behavior: 'instant' });
-    summary.focus({ preventScroll: true });
+    const target = review.closest('.flow-pane')?.querySelector('[data-review-content] h2, [data-quiz="transfer"] legend') || summary;
+    target.tabIndex = -1;
+    target.scrollIntoView({ block: 'start', behavior: 'instant' });
+    target.focus({ preventScroll: true });
   }
 
   jump.hidden = false;
@@ -636,8 +643,10 @@ function mountLearningAdditions(entry) {
     const activity = data[name];
     const options = [...section.querySelectorAll('[data-answer]')];
     const feedback = section.querySelector('.feedback');
+    const checkButton = section.querySelector('[data-check]');
     const evidenceButton = section.querySelector('[data-cell-find-evidence]');
     const sourceButton = section.querySelector('[data-review-evidence]');
+    const hintButton = section.querySelector('[data-quiz-hint]');
     const checkedKey = name + 'Checked';
     const consultationKey = name + 'Consulted';
     const checkedConsultationKey = name + 'ConsultedWhenChecked';
@@ -647,38 +656,59 @@ function mountLearningAdditions(entry) {
       state.reviews = { ...state.reviews, [entry.id]: record };
       saveState();
     }
-    if (typeof bindReviewEvidence === 'function') {
+    const hasSource = typeof bindReviewEvidence === 'function' &&
       bindReviewEvidence(entry, sourceButton, () => rememberReview({ [consultationKey]: true }));
-    }
     const previous = state.reviews?.[entry.id]?.[name];
     const chosen = new Set(Array.isArray(previous) ? previous.filter(value => options.some(option => option.dataset.answer === value)) : []);
-    for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
+
+    function updateChoices() {
+      for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
+      if (checkButton) checkButton.disabled = !chosen.size;
+    }
+
+    function updateActions(outcome, specificEvidence = false, needsPhoto = false) {
+      sourceButton.hidden = !hasSource || specificEvidence || outcome === 'correct';
+      hintButton.hidden = hasSource || specificEvidence || outcome === 'correct';
+      if (evidenceButton) {
+        evidenceButton.hidden = !specificEvidence;
+        evidenceButton.classList.toggle('action', needsPhoto);
+        evidenceButton.classList.toggle('text-control', !needsPhoto);
+      }
+      if (checkButton) checkButton.hidden = outcome === 'correct';
+      showQuizOutcome(section, outcome);
+    }
+
+    function showReady() {
+      delete section.dataset.result;
+      feedback.textContent = '';
+      updateActions('ready');
+    }
+
+    updateChoices();
+    showReady();
     options.forEach(button => button.addEventListener('click', () => {
       const value = button.dataset.answer;
-      if (value === 'unsure' || activity.correct.length === 1) {
-        const wasChosen = chosen.has(value);
+      if (!checkButton) {
         chosen.clear();
-        if (!wasChosen) chosen.add(value);
+        chosen.add(value);
       } else {
-        chosen.delete('unsure');
         if (chosen.has(value)) chosen.delete(value);
         else chosen.add(value);
       }
-      for (const option of options) option.setAttribute('aria-pressed', String(chosen.has(option.dataset.answer)));
-      feedback.textContent = '';
-      if (evidenceButton) evidenceButton.hidden = true;
-      delete section.dataset.result;
+      updateChoices();
       rememberReview({
         [name]: [...chosen], [checkedKey]: false,
         ...(evidenceButton ? { cellEvidenceChecked: false } : {}),
       });
+      if (!checkButton) {
+        check();
+        if (typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(button, feedback);
+      } else {
+        showReady();
+      }
     }));
     function check(remember = true) {
-      if (!chosen.size || chosen.has('unsure')) {
-        delete section.dataset.result;
-        feedback.textContent = `可以先看看这个提示，再试一次。${activity.hint || '先找一条能回答问题的观察记录。'}`;
-        return;
-      }
+      if (!chosen.size) return;
       const correct = activity.correct.length === chosen.size && activity.correct.every(i => chosen.has(String(i)));
       if (remember && correct && entry.id === 'research-methods' && name === 'evidence') {
         const reading = section.closest('.flow-pane')?.querySelector('[data-difference]')?.closest('details');
@@ -694,8 +724,9 @@ function mountLearningAdditions(entry) {
           + (activity.correct.length > 1 && remaining ? '还少 ' + remaining + ' 条可配对的记录。' : '');
       const photoUnavailable = evidenceButton && Boolean(outlet.querySelector('.cell-samples [data-image-status="failed"]'));
       const hasPhotoEvidence = evidenceButton && state.cell?.observations?.leaf === 1;
+      const needsPhoto = Boolean(correct && evidenceButton && !hasPhotoEvidence && !photoUnavailable);
       const qualifier = photoUnavailable ? '照片暂不可见，这次可根据文字记录判断。'
-        : correct && evidenceButton && !hasPhotoEvidence ? '选择和记录相符。试着回图指出绿点。' : '';
+        : needsPhoto ? '选择和记录相符。试着回图指出绿点。' : '';
       section.dataset.result = correct ? 'correct' : 'retry';
       const result = correct ? (qualifier || '答对了。') : '还需对照。' + qualifier;
       const review = state.reviews?.[entry.id];
@@ -705,9 +736,9 @@ function mountLearningAdditions(entry) {
         ? consulted ? ' 回看材料后核对正确。' : firstCheck ? ' 首次核对正确。' : ' 反馈后改对。'
         : '');
       if (evidenceButton) {
-        evidenceButton.hidden = false;
         evidenceButton.textContent = ['回看照片比例 ↑', '在照片中找绿点 ↑', '对照细胞结构示意 ↑'][option];
       }
+      updateActions(correct && !needsPhoto ? 'correct' : 'retry', Boolean(evidenceButton && (!correct || needsPhoto)), needsPhoto);
       if (!remember) return;
       rememberReview({ [checkedKey]: true, [firstCheckKey]: firstCheck, [checkedConsultationKey]: consulted });
       if (name === 'transfer') {
@@ -718,16 +749,22 @@ function mountLearningAdditions(entry) {
         saveState();
       }
     }
+    hintButton.addEventListener('click', () => {
+      rememberReview({ [consultationKey]: true });
+      feedback.textContent = activity.hint || '先找一条能回答问题的观察记录。';
+    });
     if (evidenceButton) {
       const back = outlet.querySelector('[data-cell-back-to-quiz]');
       const model = outlet.querySelector('[data-cell-model]');
+      let returnScroll = 0;
       function focusCellEvidence(target) {
-        if (typeof showLessonFlowFor === 'function') showLessonFlowFor(target);
+        if (typeof showLessonFlowFor === 'function') showLessonFlowFor(target, { temporary: true });
         target.focus({ preventScroll: true });
         target.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
       evidenceButton.addEventListener('click', () => {
         rememberReview({ [consultationKey]: true });
+        returnScroll = scrollY;
         back.hidden = false;
         if (chosen.has('2')) {
           model.open = true;
@@ -741,22 +778,23 @@ function mountLearningAdditions(entry) {
         }
       });
       back.addEventListener('click', () => {
+        back.hidden = true;
+        if (typeof showLessonFlowFor === 'function') showLessonFlowFor(section);
         check(false);
-        focusCellEvidence(evidenceButton);
+        const target = evidenceButton.hidden ? section.querySelector('[aria-pressed="true"]') || feedback : evidenceButton;
+        target.focus({ preventScroll: true });
+        scrollTo({ top: returnScroll, behavior: 'instant' });
       });
     }
     if (state.reviews?.[entry.id]?.[checkedKey] ||
         evidenceButton && state.reviews?.[entry.id]?.cellEvidenceChecked) check(false);
-    section.querySelector('[data-check]').addEventListener('click', event => {
+    checkButton?.addEventListener('click', event => {
       check();
-      if (typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(event.currentTarget, feedback);
+      if (checkButton.hidden) {
+        feedback.focus({ preventScroll: true });
+        feedback.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      } else if (typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(event.currentTarget, feedback);
     });
-  }
-  const listen = outlet.querySelector('[data-listen]');
-  if (listen && typeof mountPromptAudio === 'function') {
-    mountPromptAudio(listen, outlet.querySelector('.audio-feedback'), entry.id);
-  } else if (listen) {
-    listen.hidden = true;
   }
 }
 

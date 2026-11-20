@@ -68,26 +68,114 @@ const legacyEvidenceTargets = {
   'plant-transport': '[data-scene="1"]',
 };
 
+const transferEvidence = {
+  'research-methods': ['[data-scene="1"]', '对比两种安排，找出哪一种同时改变了水量和光照。'],
+  'plant-transport': ['[data-scene="0"]', '沿着切面中染上颜色的位置，看看这张照片实际记录的是哪一条路线。'],
+  photosynthesis: ['[data-scene="1"]', '看看图上分别记录了哪些条件和产物。想想只看叶色，还缺少哪类记录。'],
+};
+
+function textReviewMaterials(entry, question, target) {
+  const lesson = globalThis.bioUnitOne?.[entry.id];
+  if (entry.id === 'life-traits') {
+    const stage = lesson?.stages?.[0];
+    if (!stage) return [];
+    return question === 'transfer'
+      ? ['课上那粒豆子放在湿润的材料上，温度合适，也接触得到空气。记录了第一天和第五天。']
+      : [stage.caption + '。', stage.description];
+  }
+  if (entry.id === 'research-methods' && question === 'evidence') {
+    const setup = lesson?.stages?.[0]?.prompt.split('。')[0];
+    return setup ? [setup + '。', '自己的笔记上，还可以核对两次量的是哪一株。'] : [];
+  }
+  if (entry.id === 'levels' && question === 'evidence') {
+    const description = lesson?.stages?.[0]?.description;
+    return description ? [description] : [];
+  }
+  if (entry.id === '7b-urine-device') {
+    return (entry.activity?.evidenceRecords ?? []).map(record => ({
+      label: record.label,
+      text: record.text.split('。')[0] + '。',
+    }));
+  }
+  const activity = entry.activity;
+  if (target?.querySelector('[data-visual-lab], [data-frame-controls]')) return [];
+  if (activity?.kind === 'evidence' || activity?.kind === 'project') {
+    // Read existing observation cards, leaving their checking result and hints in the activity.
+    const rows = activity.evidenceRecords ?? activity.rows ?? activity.tiles ?? [];
+    const solvedLabel = [entry.review, entry.review?.alternate].map(quiz => quiz?.options?.[quiz.answer]?.[0]);
+    const repeatsAnswer = rows.some(row => solvedLabel.some(answer => answer &&
+      [(row.label || '').trim(), (row.text || '').trim()].includes(answer.trim())));
+    if (!repeatsAnswer) return rows;
+  }
+  return [];
+}
+
+function bindInlineReviewMaterials(entry, trigger, question, materials, visit) {
+  const panel = document.createElement('aside');
+  panel.className = 'review-evidence-guide review-evidence-inline';
+  panel.id = `review-material-${entry.id}-${question || 'new'}`;
+  panel.setAttribute('aria-label', '本课观察记录');
+  panel.hidden = true;
+  for (const material of materials) {
+    const line = document.createElement('p');
+    if (typeof material === 'string') {
+      line.textContent = material;
+    } else {
+      const label = document.createElement('strong');
+      label.textContent = material.label + '　';
+      line.append(label, material.text);
+    }
+    panel.append(line);
+  }
+  trigger.after(panel);
+  trigger.setAttribute('aria-controls', panel.id);
+  function show(open) {
+    panel.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+    trigger.textContent = open ? '收起材料' : '看材料';
+  }
+  show(false);
+  trigger.addEventListener('click', () => {
+    const open = panel.hidden;
+    if (open) visit();
+    show(open);
+    if (open && typeof keepActivityFeedbackVisible === 'function') keepActivityFeedbackVisible(trigger, panel);
+  });
+  const visibility = new MutationObserver(() => {
+    if (trigger.hidden && !panel.hidden) show(false);
+  });
+  visibility.observe(trigger, { attributes: true, attributeFilter: ['hidden'] });
+}
+
 function bindReviewEvidence(entry, trigger, visit = () => {}) {
-  const researchTransfer = entry.id === 'research-methods' && Boolean(trigger.closest('[data-quiz="transfer"]'));
-  const target = outlet.querySelector((researchTransfer ? '[data-scene="1"]' : legacyEvidenceTargets[entry.id]) ||
+  if (!trigger) return false;
+  const quiz = trigger.closest('[data-quiz], [data-review-content]');
+  const question = quiz?.dataset.quiz;
+  const [scene, instruction] = (question === 'transfer' ? transferEvidence[entry.id] : null) ?? [];
+  const target = outlet.querySelector(scene ?? legacyEvidenceTargets[entry.id] ??
     '[data-term-activity], [data-project-id], [data-scene="0"]');
-  if (!target || !reviewEvidenceCues[entry.id]) return;
+  const materials = textReviewMaterials(entry, question, target);
+  if (materials.length) {
+    bindInlineReviewMaterials(entry, trigger, question, materials, visit);
+    return true;
+  }
+  if (!target || !reviewEvidenceCues[entry.id]) return false;
   let guide = target.querySelector(':scope > [data-review-evidence-guide]');
   if (!guide) {
     guide = document.createElement('div');
     guide.className = 'review-evidence-guide';
     guide.dataset.reviewEvidenceGuide = '';
-    guide.innerHTML = '<p tabindex="-1"></p><button type="button" class="text-control">回到刚才的小题 ↓</button>';
+    guide.innerHTML = '<p tabindex="-1"></p><button type="button" class="text-control">回到刚才的小题</button>';
     guide.hidden = true;
     target.prepend(guide);
   }
   const cue = guide.querySelector('p');
-  cue.textContent = researchTransfer ? '对比两种安排，找出哪一种同时改变了水量和光照。' : reviewEvidenceCues[entry.id];
-  trigger.hidden = false;
+  trigger.textContent = '看材料';
   trigger.addEventListener('click', () => {
+    cue.textContent = instruction ?? reviewEvidenceCues[entry.id];
     visit();
-    if (typeof showLessonFlowFor === 'function') showLessonFlowFor(target);
+    const previousScroll = window.scrollY;
+    if (typeof showLessonFlowFor === 'function') showLessonFlowFor(target, { temporary: true });
     for (let ancestor = target; ancestor && ancestor !== outlet; ancestor = ancestor.parentElement) {
       if (ancestor.tagName === 'DETAILS') ancestor.open = true;
     }
@@ -96,10 +184,18 @@ function bindReviewEvidence(entry, trigger, visit = () => {}) {
       guide.hidden = true;
       const source = trigger.isConnected ? trigger : outlet.querySelector('[data-review-evidence]');
       if (typeof showLessonFlowFor === 'function') showLessonFlowFor(source);
-      source?.focus({ preventScroll: true });
-      source?.scrollIntoView({ block: 'center', behavior: 'instant' });
+      const destination = source?.hidden
+        ? quiz?.querySelector('button[aria-pressed="true"], h2[tabindex="-1"]')
+        : source;
+      destination?.focus({ preventScroll: true });
+      window.scrollTo({ top: previousScroll, behavior: 'instant' });
+      const rect = destination?.getBoundingClientRect();
+      if (rect && (rect.top < 0 || rect.bottom > innerHeight)) {
+        destination.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+      }
     };
     cue.focus({ preventScroll: true });
     cue.scrollIntoView({ block: 'start', behavior: 'instant' });
   });
+  return true;
 }
