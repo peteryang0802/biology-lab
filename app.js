@@ -4,6 +4,7 @@ const outlet = document.querySelector('#lesson');
 const firstBook = document.querySelector('#first-book').content;
 const route = id => '#/lesson/' + id;
 const termRoute = id => '#/term/' + id;
+const fairComparisonRoute = '#/challenge/fair-comparison';
 const terms = [
   { id: '7a', title: '七年级上册', theme: '认识生命 · 营养和运输', count: 14 },
   { id: '7b', title: '七年级下册', theme: '呼吸、排泄与生命活动调节', count: 14 },
@@ -34,6 +35,8 @@ const directoryExit = document.querySelector('.lesson-directory-exit');
 const directoryExitLabel = directoryExit.querySelector('[data-directory-label]');
 let routeVersion = 0;
 let renderedLesson = null;
+let showingFairComparison = false;
+let unmountFairComparison;
 let resumeReviewId;
 const directoryPositions = new Map();
 const lessonPositions = new Map();
@@ -224,7 +227,9 @@ function renderCatalogue(entries, firstToStudy) {
       <h3>${escape(chapter)}</h3>
       ${list.map(entry => `<a href="${route(entry.id)}" data-entry-id="${entry.id}" ${entry.project ? 'data-project' : ''} ${entry === firstToStudy ? 'data-directory-start' : ''}>
         <span>${escape(entry.title)}${entry.project ? ' <small>项目实践</small>' : ''}</span><small class="directory-status"></small><span class="chapter-page">第 ${entry.page} 页</span>
-      </a>`).join('')}
+      </a>${entry.id === 'research-methods' ? `<a href="${fairComparisonRoute}" class="fair-entry" data-fair-entry>
+        <span>哪两组能公平比较？</span><small>选做闯关</small>
+      </a>` : ''}`).join('')}
     </div>`).join('')}
   </section>`).join('');
 }
@@ -1021,6 +1026,10 @@ function restoreDirectoryPosition(term, lesson) {
 async function render(focus = false) {
   const version = ++routeVersion;
   const previousLesson = renderedLesson;
+  const returningFromFairComparison = showingFairComparison;
+  unmountFairComparison?.();
+  unmountFairComparison = undefined;
+  showingFairComparison = false;
   renderedLesson = null;
   progress.refresh();
   const hash = location.hash;
@@ -1031,6 +1040,31 @@ async function render(focus = false) {
     resumeReviewId === lessonId && state.reviewOpen?.[lessonId] === true));
   resumeReviewId = undefined;
   playingPrompt?.stop();
+  if (hash === fairComparisonRoute) {
+    showingFairComparison = true;
+    showLocation(termsById.get('7a'), true);
+    document.title = '哪两组能公平比较？ · 生物实验台';
+    outlet.innerHTML = '<section class="load-panel"><h1 id="lesson-title" tabindex="-1">哪两组能公平比较？</h1><p role="status">正在准备闯关题目……</p></section>';
+    try {
+      const { mountFairComparison } = await import('./fair-comparison.js?v=1');
+      if (routeVersion !== version) return;
+      unmountFairComparison = mountFairComparison(outlet, {
+        read() {
+          progress.refresh();
+          return state.activities?.['research-methods']?.fairComparison;
+        },
+        write(run) { saveActivityField('research-methods', 'fairComparison', run); },
+      });
+    } catch (error) {
+      if (routeVersion !== version) return;
+      console.warn('Could not open the biology challenge', error);
+      outlet.innerHTML = `<section class="load-panel"><h1 id="lesson-title" tabindex="-1">闯关暂时没打开</h1>
+        <button type="button" class="action" data-reload>重新载入</button></section>`;
+      outlet.querySelector('[data-reload]').addEventListener('click', () => location.reload());
+      finishNavigation(focus);
+    }
+    return;
+  }
   const termId = /^#\/term\/(7a|7b|8a|8b)$/.exec(hash)?.[1] || termForLesson(lessonId);
   const term = termsById.get(termId);
   showLocation(term, Boolean(lessonId));
@@ -1049,6 +1083,12 @@ async function render(focus = false) {
       if (routeVersion !== version) return;
       if (!lessonId) {
         renderTerm(term, entries);
+        if (focus && returningFromFairComparison && term.id === '7a') {
+          const link = outlet.querySelector('[data-fair-entry]');
+          link.focus({ preventScroll: true });
+          link.scrollIntoView({ block: 'center', behavior: 'instant' });
+          return;
+        }
         if (focus && previousLesson?.term === term.id && restoreDirectoryPosition(term, previousLesson)) return;
       } else {
         entry = entriesById.get(lessonId);
