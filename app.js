@@ -1066,7 +1066,7 @@ async function render(focus = false) {
     document.title = '哪两组能公平比较？ · 生物实验台';
     outlet.innerHTML = '<section class="load-panel"><h1 id="lesson-title" tabindex="-1">哪两组能公平比较？</h1><p role="status">正在准备闯关题目……</p></section>';
     try {
-      const { mountFairComparison } = await import('./fair-comparison.js?v=4');
+      const { mountFairComparison } = await import('./fair-comparison.js?v=5');
       if (routeVersion !== version) return;
       unmountFairComparison = mountFairComparison(outlet, {
         returnHref,

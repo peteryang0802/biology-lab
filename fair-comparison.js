@@ -1,5 +1,5 @@
 import { fairComparisonBank, fairComparisonRepractice } from './fair-comparison-bank.js?v=2';
-import { createChallengeFeedback } from './challenge-feedback.js?v=1';
+import { createChallengeFeedback } from './challenge-feedback.js?v=2';
 
 const duration = 30_000;
 const finalQuestion = fairComparisonBank.at(-1);
