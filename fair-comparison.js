@@ -158,7 +158,7 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     const done = result?.done === true;
     const selected = state.draft?.id === item.id && state.draft?.kind === kind && validOption(state.draft?.choice, question)
       ? state.draft.choice : null;
-    let feedback = '';
+    let feedbackMarkup = '';
     if (done) {
       const success = result.first === question.answer;
       const title = result.assisted ? '把思路看完了。' : success ? '答对了。' : '这次改对了。';
@@ -167,10 +167,10 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
       else if (kind === 'variant' && !success) score = '已按提示完成。再换一道新材料练一练。';
       else if (kind === 'variant' && state.answers[item.id].main.first === item.answer) score = '独立验证通过。分数照旧。';
       else score = success ? '获得 1 分。' : '关末可以用新材料验证补分。';
-      feedback = `<div class="fair-feedback is-right" data-fair-feedback tabindex="-1"><h2>${title} ${score}</h2>
+      feedbackMarkup = `<div class="fair-feedback is-right" data-fair-feedback tabindex="-1"><h2>${title} ${score}</h2>
         <p>${escape(question.feedback[question.answer])} ${escape(question.explanation)}</p></div>`;
     } else if (result) {
-      feedback = `<div class="fair-feedback" data-fair-feedback tabindex="-1"><h2>${result.lastWrong === null ? '时间到了，接着不限时想。' : '再看一眼这项条件。'}</h2>
+      feedbackMarkup = `<div class="fair-feedback" data-fair-feedback tabindex="-1"><h2>${result.lastWrong === null ? '时间到了，接着不限时想。' : '再看一眼这项条件。'}</h2>
         ${result.lastWrong === null ? '' : `<p>你选了「${escape(question.options[result.lastWrong])}」。${escape(question.feedback[result.lastWrong])}</p>`}
         <p><strong>线索</strong> ${escape(question.hint)}</p></div>`;
     }
@@ -184,9 +184,9 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     display(`<p class="fair-eyebrow">${kind === 'practice' ? '新材料复练 · 不计分' : kind === 'variant' ? '换份材料自己试' : result && !done ? '在原题订正' : '单项选择'}</p>
       <h1 id="lesson-title" tabindex="-1">${escape(question.prompt)}</h1>
       ${materialCard(question.material)}
-      ${done ? '' : feedback}
+      ${done ? '' : feedbackMarkup}
       <form data-fair-form><fieldset class="fair-choices" aria-labelledby="lesson-title"><legend class="fair-sr">选一个答案</legend>${choices}</fieldset>
-        ${done ? feedback : ''}<p class="fair-input-message" data-fair-message role="status" hidden></p>
+        ${done ? feedbackMarkup : ''}<p class="fair-input-message" data-fair-message role="status" hidden></p>
         <div class="fair-actions">${actions}</div>
       </form>`, {item, kind, feedbackFocus});
     if (kind === 'main' && state.mode === 'timed' && question.timed && !result) startTimer(item);
