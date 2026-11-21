@@ -1,4 +1,5 @@
 import { fairComparisonBank, fairComparisonRepractice } from './fair-comparison-bank.js?v=2';
+import { createChallengeFeedback } from './challenge-feedback.js?v=1';
 
 const duration = 30_000;
 const finalQuestion = fairComparisonBank.at(-1);
@@ -61,11 +62,13 @@ function questionFor(item, kind) {
 export function mountFairComparison(root, {read, write, returnHref, returnLabel}) {
   const controller = new AbortController();
   const {signal} = controller;
+  const feedback = createChallengeFeedback(root);
   let state = cleanRun(read());
   let interval = 0;
   let deadline = 0;
   let lastSecond = null;
   let resetting = false;
+  let celebrateOnAdvance = false;
 
   function save(update) {
     const latest = cleanRun(read());
@@ -78,13 +81,19 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     return true;
   }
 
-  function pointFor(item) {
-    const attempts = state.answers[item.id];
+  function pointFor(item, run = state) {
+    const attempts = run.answers[item.id];
     return Number(attempts?.main?.first === item.answer || attempts?.variant?.first === item.variant.answer);
   }
 
-  function total() {
-    return fairComparisonBank.reduce((count, item) => count + pointFor(item), 0);
+  function total(run = state) {
+    return fairComparisonBank.reduce((count, item) => count + pointFor(item, run), 0);
+  }
+
+  function earnsFlower(run = state) {
+    if (run.cursor !== fairComparisonBank.length || total(run) !== fairComparisonBank.length) return false;
+    const answers = run.answers[finalQuestion.id];
+    return [answers?.variant, answers?.practice].some(answer => answer?.done && !answer.assisted);
   }
 
   function verified(item, run = state) {
@@ -124,10 +133,11 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     </aside>`;
   }
 
-  function display(body, {item, kind, feedback = false} = {}) {
-    root.innerHTML = `<div class="fair-challenge"><div class="fair-layout">${progressPanel(item, kind)}
+  function display(body, {item, kind, feedbackFocus = false} = {}) {
+    root.innerHTML = `<div class="fair-challenge"><div class="fair-feedback-tools">${feedback.soundButton()}</div>
+      <div class="fair-layout">${progressPanel(item, kind)}
       <section class="fair-task">${body}</section></div></div>`;
-    if (feedback) root.querySelector('[data-fair-feedback]')?.focus({preventScroll: true});
+    if (feedbackFocus) root.querySelector('[data-fair-feedback]')?.focus({preventScroll: true});
     else {
       root.querySelector('h1')?.focus({preventScroll: true});
       window.scrollTo(0, 0);
@@ -178,7 +188,7 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
       <form data-fair-form><fieldset class="fair-choices" aria-labelledby="lesson-title"><legend class="fair-sr">选一个答案</legend>${choices}</fieldset>
         ${done ? feedback : ''}<p class="fair-input-message" data-fair-message role="status" hidden></p>
         <div class="fair-actions">${actions}</div>
-      </form>`, {item, kind, feedback: feedbackFocus});
+      </form>`, {item, kind, feedbackFocus});
     if (kind === 'main' && state.mode === 'timed' && question.timed && !result) startTimer(item);
   }
 
@@ -202,6 +212,7 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
           : guided ? '这轮还留有需要练习的内容，可展开记录看看是哪一项。' : '本关的新材料验证已完成。';
     display(`<h1 id="lesson-title" tabindex="-1">10 道题做完了</h1>
       <p class="fair-lede">首答正确 ${totalFirst} 道 · 累计 ${points} 分</p>
+      ${earnsFlower() ? feedback.flower() : ''}
       ${card}
       <p class="fair-verification" data-fair-verification>新材料 · ${ready} 项独立通过${guided ? ` · ${guided} 项按提示完成，仍需练` : ''}</p>
       <p class="fair-summary-next">${nextMessage}</p>
@@ -262,12 +273,15 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     const expired = kind === 'main' && deadline > 0 && performance.now() >= deadline;
     stopTimer();
     const actual = expired ? null : choice;
-    save(draft => {
+    const right = !assisted && actual === question.answer;
+    let justEarned = false;
+    const accepted = save(draft => {
       if (!currentAttempt(draft, item, kind)) return false;
       const attempts = draft.answers[item.id] ??= {};
       const previous = attempts[kind];
       if (previous?.done || (actual === null && previous)) return false;
-      const done = assisted || actual === question.answer;
+      const hadFlower = right && earnsFlower(draft);
+      const done = assisted || right;
       attempts[kind] = {
         first: previous ? previous.first : actual,
         lastWrong: done ? previous?.lastWrong ?? null : actual,
@@ -276,7 +290,12 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
       };
       draft.draft = null;
       draft.remainingMs = null;
+      justEarned = right && !hadFlower && earnsFlower(draft);
     });
+    if (accepted && right) {
+      celebrateOnAdvance = justEarned;
+      feedback.correct();
+    }
     render({feedbackFocus: true});
   }
 
@@ -301,7 +320,7 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
   }
 
   function advance(item, kind) {
-    save(draft => {
+    const advanced = save(draft => {
       if (!currentAttempt(draft, item, kind) || !draft.answers[item.id]?.[kind]?.done) return false;
       if (kind === 'main') draft.cursor += 1;
       else {
@@ -311,7 +330,10 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
       draft.draft = null;
       draft.remainingMs = null;
     });
+    const celebrate = advanced && celebrateOnAdvance && !activeItem() && earnsFlower();
+    celebrateOnAdvance = false;
     render();
+    if (celebrate) feedback.celebrate();
   }
 
   function context() {
@@ -363,7 +385,10 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
     if (document.hidden) stopTimer(true);
     else if (!resetting && !interval && root.querySelector('[data-fair-timer]:not([hidden])')) render();
   }, {signal});
-  window.addEventListener('pagehide', () => stopTimer(true), {signal});
+  window.addEventListener('pagehide', () => {
+    celebrateOnAdvance = false;
+    stopTimer(true);
+  }, {signal});
   window.addEventListener('pageshow', event => {
     if (event.persisted) {
       state = cleanRun(read());
@@ -373,7 +398,10 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
   window.addEventListener('parent-learning-reset', event => {
     if (event.detail?.subject !== 'biology') return;
     resetting = event.detail.phase === 'start';
-    if (resetting) stopTimer();
+    if (resetting) {
+      celebrateOnAdvance = false;
+      stopTimer();
+    }
     else {
       state = cleanRun(read());
       render();
@@ -383,5 +411,6 @@ export function mountFairComparison(root, {read, write, returnHref, returnLabel}
   return () => {
     stopTimer(true);
     controller.abort();
+    feedback.destroy();
   };
 }

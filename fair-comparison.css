@@ -31,6 +31,7 @@
   margin-inline: auto;
 }
 .fair-layout { display: grid; gap: clamp(18px, 3vw, 32px); }
+.fair-feedback-tools { display: flex; justify-content: flex-end; margin-bottom: .25rem; }
 .fair-progress {
   min-width: 0;
   align-self: start;
